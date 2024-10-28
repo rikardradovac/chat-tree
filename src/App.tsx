@@ -1,11 +1,11 @@
 import Header from "./components/header";
-import Hello from "./components/hello";
+import ChatGraph from "./components/tree"
 
 function App() {
   return (
     <div className="w-full h-full">
       <Header />
-      <Hello />
+      <ChatGraph />
     </div>
   );
 }

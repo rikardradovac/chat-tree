@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import {
   ReactFlow,
   useNodesState,
@@ -92,22 +92,20 @@ const ConversationTree = ({ conversationData }: { conversationData: Conversation
     const newEdges = new Set<Edge>();
     const nodePositions = new Map<string, {x: number, y: number}>();
     
-    // Find the first meaningful nodes (user messages) after system messages
-    const findFirstUserNodes = () => {
-      // Start from the root node (the one with null message)
+    // Find the first meaningful nodes (nodes with content)
+    const findFirstContentNodes = () => {
       const rootId = Object.keys(mapping).find(id => !mapping[id].message && !mapping[id].parent);
       if (!rootId || !mapping[rootId].children) return [];
       
-      // Get all paths through system messages to first user/assistant messages
-      const userNodes: string[] = [];
+      const contentNodes: string[] = [];
       const processNode = (nodeId: string) => {
         const node = mapping[nodeId];
         
-        // If this is a user/assistant message, add it to our list
-        if (node.message && 
+        // If this node has content and is not system/tool, add it to our list
+        if (node.message?.content?.parts?.[0] && 
             node.message.author.role !== 'system' && 
             node.message.author.role !== 'tool') {
-          userNodes.push(nodeId);
+          contentNodes.push(nodeId);
           return;
         }
         
@@ -118,15 +116,29 @@ const ConversationTree = ({ conversationData }: { conversationData: Conversation
       };
       
       mapping[rootId].children.forEach(childId => processNode(childId));
-      return userNodes;
+      return contentNodes;
+    };
+
+    // Get the first parent with content
+    const getContentParent = (nodeId: string): string | null => {
+      const node = mapping[nodeId];
+      if (!node.parent) return null;
+      
+      const parent = mapping[node.parent];
+      if (parent.message?.content?.parts?.[0] && 
+          parent.message.author.role !== 'system' && 
+          parent.message.author.role !== 'tool') {
+        return node.parent;
+      }
+      return getContentParent(node.parent);
     };
 
     // Calculate positions for a node and all its descendants
     const calculatePositions = (nodeId: string, xOffset: number, level = 0) => {
       const node = mapping[nodeId];
       
-      // Skip system and tool messages
-      if (!node.message || 
+      // Skip nodes without content or system/tool nodes
+      if (!node.message?.content?.parts?.[0] || 
           node.message.author.role === 'system' || 
           node.message.author.role === 'tool') {
         return;
@@ -135,34 +147,41 @@ const ConversationTree = ({ conversationData }: { conversationData: Conversation
       // Set position for current node
       const position = {
         x: xOffset,
-        y: level * 150  // Reduced vertical spacing for better visibility
+        y: level * 150
       };
       nodePositions.set(nodeId, position);
 
-      // Process children
+      // Process children, skipping intermediate nodes
       if (node.children) {
         node.children.forEach(childId => {
           const childNode = mapping[childId];
-          if (childNode.message && 
+          if (childNode.message?.content?.parts?.[0] && 
               childNode.message.author.role !== 'system' && 
-              childNode.message.author.role !== 'tool') {
+              childNode.message.author.role !== 'tool' &&
+              childNode.message.recipient === 'all') {
             calculatePositions(childId, xOffset, level + 1);
+          } else if (childNode.children) {
+            // If this is an intermediate node, process its children
+            childNode.children.forEach(grandChildId => {
+              calculatePositions(grandChildId, xOffset, level + 1);
+            });
           }
         });
       }
     };
 
-    // Start position calculation from first user nodes
-    const firstUserNodes = findFirstUserNodes();
-    firstUserNodes.forEach((nodeId, index) => {
-      calculatePositions(nodeId, index * 400); // Increased horizontal spacing
+    // Start position calculation from first content nodes
+    const firstContentNodes = findFirstContentNodes();
+    firstContentNodes.forEach((nodeId, index) => {
+      calculatePositions(nodeId, index * 300);
     });
 
     // Create nodes and edges
     Object.keys(mapping).forEach(nodeId => {
       const node = mapping[nodeId];
       
-      if (!node.message || 
+      // Skip nodes without content or system/tool nodes
+      if (!node.message?.content?.parts?.[0] || 
           node.message.author.role === 'system' || 
           node.message.author.role === 'tool') {
         return;
@@ -172,7 +191,7 @@ const ConversationTree = ({ conversationData }: { conversationData: Conversation
       if (!position) return;
 
       const role = node.message.author.role;
-      const content = node.message.content.parts?.[0]?.substring(0, 50) + "..." || `node: ${nodeId}`;
+      const content = node.message.content.parts[0].substring(0, 50) + "...";
       
       newNodes.add({
         ...node,
@@ -182,19 +201,15 @@ const ConversationTree = ({ conversationData }: { conversationData: Conversation
         }
       });
 
-      if (node.parent) {
-        // Only create edges between visible nodes
-        const parentNode = mapping[node.parent];
-        if (parentNode.message && 
-            parentNode.message.author.role !== 'system' && 
-            parentNode.message.author.role !== 'tool') {
-          newEdges.add({
-            id: `${node.parent}-${nodeId}`,
-            source: node.parent,
-            target: nodeId,
-            type: 'smoothstep',
-          });
-        }
+      // Create edge to content parent
+      const contentParent = getContentParent(nodeId);
+      if (contentParent) {
+        newEdges.add({
+          id: `${contentParent}-${nodeId}`,
+          source: contentParent,
+          target: nodeId,
+          type: 'smoothstep',
+        });
       }
     });
 
@@ -220,10 +235,7 @@ const ConversationTree = ({ conversationData }: { conversationData: Conversation
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         fitView // Add this to automatically fit the view to the graph
-        defaultEdgeOptions={{ // Add default edge options for better visualization
-          type: 'smoothstep',
-          animated: true,
-        }}>
+        >
         <Controls />
         <MiniMap />
         <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
