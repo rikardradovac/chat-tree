@@ -16,9 +16,16 @@
             "128": "logo128.png"
         }
     },
+    "background": {
+        "service_worker": "background.js",
+        "type": "module"
+    },
     "permissions": [
         "storage",
-        "tabs"
+        "tabs",
+        "webRequest"
     ],
-    "homepage_url": "https://timeless.co"
+    "host_permissions": [
+        "https://chatgpt.com/backend-api/*"
+    ]
 }
