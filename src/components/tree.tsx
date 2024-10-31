@@ -9,6 +9,9 @@ import {
   Controls,
   Background,
   BackgroundVariant,
+  Handle,
+  Position,
+  NodeTypes,
 } from '@xyflow/react';
  
 import '@xyflow/react/dist/style.css';
@@ -44,10 +47,11 @@ interface Message {
 interface Node {
     position?: { x: number; y: number };
     id: string;
-    data?: { label: string };
+    data?: { label: string; role?: string; timestamp?: number };
     message: Message | null;
     parent: string | null;
     children: string[];
+    type?: string;
 }
 
 interface Edge {
@@ -55,6 +59,8 @@ interface Edge {
     source: string;
     target: string;
     type: string;
+    animated?: boolean;
+    style?: any;
 }
 
 interface Mapping {
@@ -80,17 +86,76 @@ interface ConversationData {
     async_status: string | null;
 }
 
+const CustomNode = ({ data }: { data: any }) => {
+  return (
+    <div className={`px-4 py-2 shadow-lg rounded-lg border ${
+      data.role === 'user' ? 'bg-blue-50 border-blue-200' : 'bg-purple-50 border-purple-200'
+    }`} style={{
+      width: '300px',
+      height: '120px',
+      position: 'relative'
+    }}>
+      <Handle type="target" position={Position.Top} className="w-2 h-2" />
+      <div className="flex items-center">
+        <div className={`w-2 h-2 rounded-full mr-2 ${
+          data.role === 'user' ? 'bg-blue-400' : 'bg-purple-400'
+        }`} />
+        <div className="text-xs font-semibold text-gray-500 uppercase">
+          {data.role}
+          
+        </div>
+      </div>
+      <div className="mt-2 text-sm text-gray-700" style={{ 
+        wordBreak: 'break-word',
+        height: '70px',
+        overflowY: 'auto'
+      }}>
+        {data.label.length > 100 ? `${data.label.substring(0, 100)}...` : data.label}
+      </div>
+      {data.timestamp && (
+        <div className="absolute bottom-2 left-4 text-xs text-gray-400">
+          {new Date(data.timestamp).toLocaleString()}
+        </div>
+      )}
+      <Handle type="source" position={Position.Bottom} className="w-2 h-2" />
+    </div>
+  );
+};
+
+const nodeXSpacing = 650;
+const nodeYSpacing = 200;
+
+const nodeTypes: NodeTypes = {
+  custom: CustomNode,
+};
+
 const ConversationTree = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [conversationData, setConversationData] = useState<ConversationData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-
   const createNodesInOrder = (conversationData: ConversationData) => {
     const mapping = conversationData.mapping;
-    const newNodes = new Set<Node>();
-    const newEdges = new Set<Edge>();
+    const newNodes = new Array<Node>();
+    const newEdges = new Array<Edge>();
+    
+    // Keep track of used positions to prevent overlapping
+    const usedPositions = new Set<string>();
+    
+    // Helper to find next available position
+    const findAvailablePosition = (baseX: number, baseY: number, scale: number): { x: number, y: number} => {
+      let x = baseX;
+      let y = baseY;
+      
+      // Keep trying positions until we find an unused one
+      while (usedPositions.has(`${Math.round(x)},${Math.round(y)}`)) {
+        x += nodeXSpacing * scale;
+      }
+      
+      usedPositions.add(`${Math.round(x)},${Math.round(y)}`);
+      return { x, y };
+    };
 
     const findFirstContentParent = (node: Node): Node | null => {
         // If no children, return null
@@ -115,194 +180,131 @@ const ConversationTree = () => {
         return null;
     }
 
-    const createChildNodes = (node: Node, xPos = 0, yPos = 0) => {
-        if (node.children.length === 0) return;
+    const createChildNodes = (node: Node, baseX = 0, yPos = 0, scale = 1) => {
+      // the scale is used to place the parent node in the middle of its children and to not push the children too far apart
+      if (node.children.length === 0) return;
 
-        node.children.forEach((childId, index) => {
-            
-            const child = mapping[childId];
-            
-            // Check if current child node is valid
-            if (child.message?.content?.parts?.[0] &&
-                child.message.author.role !== 'system' && 
-                child.message.author.role !== 'tool' &&
-                child.message.recipient === 'all') {
-                child.parent = node.id; // Set parent to current node
-                child.position = { x: xPos + index * 300, y: yPos };
-                const role = child.message.author.role;
-                const content = child.message.content.parts[0].substring(0, 50) + "...";
-                child.data = {
-                    label: `[${role}] ${content}`
-                }
-                newNodes.add(child);
-                newEdges.add({
-                    id: `${node.id}-${child.id}`,
-                    source: node.id,
-                    target: child.id,
-                    type: 'smoothstep',
-                });
-                createChildNodes(child, xPos + index * 300, yPos + 150); // Process children at next Y level
-            } else {
-                // Skip this node and process its children
-                child.children.forEach((grandChildId) => {
-                    const grandChild = mapping[grandChildId];
-                    // Recursively find valid descendants
-                    const processDescendant = (descendant: Node) => {
-                        if (descendant.message?.content?.parts?.[0] && 
-                            descendant.message.author.role !== 'system' && 
-                            descendant.message.author.role !== 'tool' &&
-                            descendant.message.recipient === 'all') {
-                            descendant.parent = node.id; // Set parent to original ancestor
-                            descendant.position = { x: xPos, y: yPos };
-                            const role = descendant.message.author.role;
-                            const content = descendant.message.content.parts[0].substring(0, 50) + "...";
-                            descendant.data = {
-                                label: `[${role}] ${content}`
-                            }
-                            newNodes.add(descendant);
-                            newEdges.add({
-                                id: `${node.id}-${descendant.id}`,
-                                source: node.id,
-                                target: descendant.id,
-                                type: 'smoothstep',
-                            });
-      
-                            createChildNodes(descendant, xPos, yPos + 150);
-                        } else {
-                            // Continue searching through children
-                            descendant.children.forEach((descId) => {
-                                processDescendant(mapping[descId]);
-                            });
-                        }
-                    };
-                    processDescendant(grandChild);
-                });
-            }
-        });
-    }
+      baseX = baseX - (nodeXSpacing * scale * (node.children.length - 1)) / 2;
 
-    // Find the root node
+      node.children.forEach((childId) => {
+        const child = mapping[childId];
+        
+        // Check if current child node is valid
+        if (child.message?.content?.parts?.[0] &&
+            child.message.author.role !== 'system' && 
+            child.message.author.role !== 'tool' &&
+            child.message.recipient === 'all') {
+        
+          const position = findAvailablePosition(
+            baseX,
+            yPos,
+            scale
+          );
+          
+          child.parent = node.id;
+          child.position = position;
+          child.type = 'custom';
+          const role = child.message.author.role;
+          const content = child.message.content.parts[0];
+          child.data = {
+            label: content,
+            role: role,
+            timestamp: child.message.create_time ?? undefined
+          };
+          
+          newNodes.push(child);
+          newEdges.push({
+            id: `${node.id}-${child.id}`,
+            source: node.id,
+            target: child.id,
+            type: 'smoothstep',
+            animated: true,
+            style: { stroke: '#2196f3', strokeWidth: 2 }
+          });
+          
+          createChildNodes(child, position.x, yPos + nodeYSpacing);
+        } else {
+          
+          child.children.forEach((grandChildId) => {
+            const grandChild = mapping[grandChildId];
+            const processDescendant = (descendant: Node) => {
+                // if the descendant is valid
+              if (descendant.message?.content?.parts?.[0] && 
+                  descendant.message.author.role !== 'system' && 
+                  descendant.message.author.role !== 'tool' &&
+                  descendant.message.recipient === 'all') {
+                
+                const position = findAvailablePosition(
+                  baseX,
+                  yPos,
+                  scale
+                );
+                
+                descendant.parent = node.id;
+                descendant.position = position;
+                descendant.type = 'custom';
+                const role = descendant.message.author.role;
+                const content = descendant.message.content.parts[0];
+                descendant.data = {
+                  label: content,
+                  role: role,
+                  timestamp: descendant.message.create_time ?? undefined
+                };
+                
+                newNodes.push(descendant);
+                newEdges.push({
+                  id: `${node.id}-${descendant.id}`,
+                  source: node.id,
+                  target: descendant.id,
+                  type: 'smoothstep',
+                  animated: true,
+                  style: { stroke: '#2196f3', strokeWidth: 2 }
+                });
+
+                  createChildNodes(descendant, position.x, yPos + nodeYSpacing, 0.5);
+                
+              } else {
+                descendant.children.forEach((descId) => {
+                  processDescendant(mapping[descId]);
+                });
+              }
+            };
+            processDescendant(grandChild);
+          });
+        }
+      });
+    };
+
+    // Root node positioning
     let rootNode = Object.values(mapping).find(node => !node.parent) as Node | null;
     if (!rootNode) return;
 
     rootNode = findFirstContentParent(rootNode);
     if (!rootNode) return;
 
-    createChildNodes(rootNode, 0, 0);
-
-    // const rootNodes = rootNode.children.map(childId => mapping[childId]);
-
-    // console.log(rootNodes);
+    const rootPosition = { x: window.innerWidth / 2, y: 50 };
+    usedPositions.add(`${Math.round(rootPosition.x)},${Math.round(rootPosition.y)}`);
+    rootNode.position = rootPosition;
     
-    // rootNodes.forEach((node, index) => {
-
-    //     createChildNodes(node, index * 300);
-    // });
-
-
+    rootNode.type = 'custom';
+    const role = rootNode.message!.author.role;
+    const content = role !== 'system' ? rootNode.message!.content.parts![0] : 'Start of your conversation';
+    rootNode.data = {
+      label: content,
+      role: role,
+      timestamp: rootNode.message?.create_time ?? undefined
+    };
     
+    newNodes.push(rootNode);
+    createChildNodes(rootNode, rootPosition.x , rootPosition.y + nodeYSpacing);
 
-
-    // // Get the first parent with content
-    // const getContentParent = (nodeId: string): string | null => {
-    //   const node = mapping[nodeId];
-    //   if (!node.parent) return null;
-      
-    //   const parent = mapping[node.parent];
-    //   if (parent.message?.content?.parts?.[0] && 
-    //       parent.message.author.role !== 'system' && 
-    //       parent.message.author.role !== 'tool') {
-    //     return node.parent;
-    //   }
-    //   return getContentParent(node.parent);
-    // };
-
-    // // Calculate positions for a node and all its descendants
-    // const calculatePositions = (nodeId: string, xOffset: number, level = 0) => {
-    //   const node = mapping[nodeId];
-      
-    //   // Skip nodes without content or system/tool nodes
-    //   if (!node.message?.content?.parts?.[0] || 
-    //       node.message.author.role === 'system' || 
-    //       node.message.author.role === 'tool') {
-    //     return;
-    //   }
-
-    //   // Set position for current node
-    //   const position = {
-    //     x: xOffset,
-    //     y: level * 150
-    //   };
-    //   nodePositions.set(nodeId, position);
-
-    //   // Process children, skipping intermediate nodes
-    //   if (node.children) {
-    //     node.children.forEach(childId => {
-    //       const childNode = mapping[childId];
-    //       if (childNode.message?.content?.parts?.[0] && 
-    //           childNode.message.author.role !== 'system' && 
-    //           childNode.message.author.role !== 'tool' &&
-    //           childNode.message.recipient === 'all') {
-    //         calculatePositions(childId, xOffset, level + 1);
-    //       } else if (childNode.children) {
-    //         // If this is an intermediate node, process its children
-    //         childNode.children.forEach(grandChildId => {
-    //           calculatePositions(grandChildId, xOffset, level + 1);
-    //         });
-    //       }
-    //     });
-    //   }
-    // };
-
-    // // Start position calculation from first content nodes
-    // const firstContentNodes = findFirstContentNodes();
-    // firstContentNodes.forEach((nodeId, index) => {
-    //   calculatePositions(nodeId, index * 300);
-    // });
-
-    // // Create nodes and edges
-    // Object.keys(mapping).forEach(nodeId => {
-    //   const node = mapping[nodeId];
-      
-    //   // Skip nodes without content or system/tool nodes
-    //   if (!node.message?.content?.parts?.[0] || 
-    //       node.message.author.role === 'system' || 
-    //       node.message.author.role === 'tool') {
-    //     return;
-    //   }
-
-    //   const position = nodePositions.get(nodeId);
-    //   if (!position) return;
-
-    //   const role = node.message.author.role;
-    //   const content = node.message.content.parts[0].substring(0, 50) + "...";
-      
-    //   newNodes.add({
-    //     ...node,
-    //     position,
-    //     data: {
-    //       label: `[${role}] ${content}`
-    //     }
-    //   });
-
-    //   // Create edge to content parent
-    //   const contentParent = getContentParent(nodeId);
-    //   if (contentParent) {
-    //     newEdges.add({
-    //       id: `${contentParent}-${nodeId}`,
-    //       source: contentParent,
-    //       target: nodeId,
-    //       type: 'smoothstep',
-    //     });
-    //   }
-    // });
-
-    setNodes(Array.from(newNodes) as any);
-    setEdges(Array.from(newEdges) as any);
+    setNodes(newNodes as any);
+    setEdges(newEdges as any);
   };
 
   useEffect(() => {
     const fetchData = async () => {
+        // fetch data using chrome extension api
       try {
         const response = await chrome.runtime.sendMessage({ action: "fetchConversationHistory" });
         if (response.success) {
@@ -316,11 +318,10 @@ const ConversationTree = () => {
         setIsLoading(false);
       }
     };
-
+    
     fetchData();
   }, []);
 
-  // Create nodes when conversation data is available
   useEffect(() => {
     if (conversationData) {
       createNodesInOrder(conversationData);
@@ -333,11 +334,19 @@ const ConversationTree = () => {
   );
 
   if (isLoading) {
-    return <div>Loading conversation...</div>;
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
   }
 
   if (!conversationData) {
-    return <div>No conversation data available</div>;
+    return (
+      <div className="flex items-center justify-center h-screen text-gray-600">
+        No conversation data available
+      </div>
+    );
   }
  
   return (
@@ -348,15 +357,23 @@ const ConversationTree = () => {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
-        fitView // Add this to automatically fit the view to the graph
-        >
-        <Controls />
-        <MiniMap />
-        <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
+        nodeTypes={nodeTypes}
+        fitView
+        minZoom={0.1}
+        maxZoom={1.5}
+        defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
+      >
+        <Controls className="bg-white rounded-lg shadow-lg" />
+        <MiniMap 
+          nodeColor={(node) => {
+            return node.data?.role === 'user' ? '#bbdefb' : '#e1bee7';
+          }}
+          className="bg-white rounded-lg shadow-lg"
+        />
+        <Background variant={BackgroundVariant.Dots} gap={12} size={1} color="#f1f1f1" />
       </ReactFlow>
     </div>
   );
 }
 
 export default ConversationTree;
-
