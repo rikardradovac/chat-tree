@@ -1,70 +1,75 @@
-# React TypeScript + Vite Chrome Extension Starter
+# ChatGPT Conversation Visualizer
 
-![build](https://github.com/timelessco/react-vite-chrome-extension/workflows/build/badge.svg)
+<!-- ![build](https://github.com/timelessco/react-vite-chrome-extension/workflows/build/badge.svg)
 
-![react-vite-chrome-extension](./assets/cover.png)
+![chatgpt-visualizer](./assets/cover.png) -->
 
-This project is a boilerplate for creating a Google Chrome Extension with React + Vitejs + TailwindCSS + TypeScript.
+This project is a Chrome Extension that visualizes ChatGPT conversations as a graph, making it easier to navigate and understand large chats.
 
 - [React](https://reactjs.org/)
 - [Vite](https://vitejs.dev/)
 - [Tailwind CSS](https://tailwindcss.com/)
 - [TypeScript](https://www.typescriptlang.org/)
 
-## :bulb: Preview
+## Preview
 
-![react-vite-chrome-extension](./assets/preview.png)
+<!-- ![chatgpt-visualizer](./assets/preview.png) -->
 
-## :package: Requirements
 
-- Nodejs v18+ LTS
+# Development
 
-## :atom_symbol: Development
+
+## Requirements
+
+- Node.js v18+ LTS
+
+
 
 - Clone this repository
 
 ```
-git clone https://github.com/timelessco/react-vite-chrome-extension
+git clone https://github.com/rikardradovac/non-linear-chat
 ```
 
 - Install dependencies
 
 ```
-pnpm install
+npm install
 ```
 
 - Start Development Server
 
 ```
-pnpm dev
+npm run dev
 ```
 
 ## :computer: Production
 
-- Building the chrome extension for production
+- Build the Chrome extension for production
 
 ```
-pnpm build
+npm run build
 ```
 
 ## :rocket: Usage
 
-- You can find the chrome extension contents in the `dist` folder
-- Open `chrome://extension` and turn on Developer Mode.
-- Click the `Load unpacked extension` button.
+- You can find the Chrome extension contents in the `dist` folder.
+- Open `chrome://extensions` and turn on Developer Mode.
+- Click the `Load unpacked` button.
 - Now, select the `dist` folder.
 - Your extension is ready to use.
 
 ### :hamburger: Additional Details
 
-- This boilerplate can be extended even further using [Chrome Extension APIs](https://developer.chrome.com/docs/extensions/reference/)
-- You can use [Content Scripts](https://developer.chrome.com/docs/extensions/mv3/content_scripts/) to inject content into the page or accessing the DOM conent.
-- By using the [Message Passing](https://developer.chrome.com/extensions/messaging) API, you can communicate with the content script and the popup.
+- This extension utilizes [Chrome Extension APIs](https://developer.chrome.com/docs/extensions/reference/) to fetch and display conversation data.
+- You can use [Content Scripts](https://developer.chrome.com/docs/extensions/mv3/content_scripts/) to inject content into the page or access the DOM.
+- By using the [Message Passing](https://developer.chrome.com/extensions/messaging) API, you can communicate between the content script and the popup.
 
 ## :green_heart: Message
 
-I hope you find this useful. If you have any questions, please create an issue.
+I hope you find this tool useful for visualizing your ChatGPT conversations. If you have any questions or suggestions, please create an issue.
 
 ## :mortar_board: License
 
 - MIT
+```
