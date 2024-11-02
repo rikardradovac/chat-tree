@@ -5,7 +5,7 @@ function Header() {
         {/* Logo and Title */}
         <div className="flex items-center gap-2.5">
           <img 
-            src="public/logo128.png" 
+            src="logo128.png" 
             alt="Logo" 
             className="h-6 w-6 opacity-80"
           />
