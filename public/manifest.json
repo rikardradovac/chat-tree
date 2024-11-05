@@ -1,6 +1,6 @@
 {
-    "name": "react-vite-chrome-extension",
-    "description": "Starter pack for Chrome extension development uses React + Vite",
+    "name": "ChatTree",
+    "description": "Tree view of your ChatGPT conversations",
     "version": "0.0.1",
     "manifest_version": 3,
     "icons": {
@@ -23,7 +23,9 @@
     "permissions": [
         "storage",
         "tabs",
-        "webRequest"
+        "webRequest",
+        "scripting",
+        "activeTab"
     ],
     "host_permissions": [
         "https://chatgpt.com/backend-api/*"
