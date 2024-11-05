@@ -1,5 +1,6 @@
 interface ContextMenuProps {
   role?: string;
+  messageId?: string;
   top: number | boolean;
   left: number | boolean;
   right: number | boolean;
@@ -9,6 +10,7 @@ interface ContextMenuProps {
 
 export default function ContextMenu({
   role,
+  messageId,
   top,
   left,
   right,
@@ -16,6 +18,12 @@ export default function ContextMenu({
   onClick,
   ...props
 }: ContextMenuProps) {
+
+
+
+    const editMessage = () => {
+        chrome.runtime.sendMessage({ action: 'editMessage', messageId: messageId });
+    }
   return (
     <div
       style={{ 
