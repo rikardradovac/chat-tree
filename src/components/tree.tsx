@@ -113,11 +113,12 @@ const CustomNode = ({ data }: { data: any }) => {
   return (
     <div className={`px-4 py-2 shadow-lg rounded-lg border ${
       data.role === 'user' ? 'bg-blue-50 border-blue-200' : 'bg-purple-50 border-purple-200'
-    }`} style={{
+    } ${data.hidden ? 'grayscale' : ''}`} style={{
       width: '300px',
-      height: '120px',
+      height: '120px', 
       position: 'relative',
-      opacity: data.hidden ? 0.6 : 1
+      opacity: data.hidden ? 0.4 : 1,
+      background: data.hidden ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px)' : undefined
     }}>
       <Handle type="target" position={Position.Top} className="w-2 h-2" />
       <div className="flex items-center">
@@ -134,7 +135,6 @@ const CustomNode = ({ data }: { data: any }) => {
         overflowY: 'auto'
       }}>
         {data.label.length > 100 ? `${data.label.substring(0, 100)}...` : data.label}
-        
       </div>
       {data.timestamp && (
         <div className="absolute bottom-2 left-4 text-xs text-gray-400">
