@@ -400,9 +400,10 @@ const ConversationTree = () => {
       // Calculate position of the context menu. We want to make sure it
       // doesn't get positioned off-screen.
       const pane = ref?.current?.getBoundingClientRect();
+      const nodeId = node.data?.id ?? '';
       if (pane) {
         setMenu({
-          messageId: node.data?.id ?? '',
+          messageId: node.data?.role === 'user' ? nodeId : node.children[0] ?? '',
           role: node.data?.role ?? '',
           top: event.clientY < pane.height - 200 && event.clientY ? event.clientY - 48 : false,
           left: event.clientX < pane.width - 200 && event.clientX ? event.clientX : false,

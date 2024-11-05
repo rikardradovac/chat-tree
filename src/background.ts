@@ -45,6 +45,11 @@ chrome.runtime.onMessage.addListener(
       sendResponse({ success: true });
       return true;
     }
+    else if (request.action === "respondToMessage") {
+      respondToMessage(request.messageId);
+      sendResponse({ success: true });
+      return true;
+    }
     return true;
   }
 );
@@ -99,8 +104,6 @@ async function checkNodesExistence(nodeIds: string[]) {
       },
       args: [nodeIds]  // Pass nodeIds as an argument to the injected function
     });
-
-    console.log("results", results);
     
     return results[0].result;  // Returns array of nodeIds that exist in the DOM
   } catch (error) {
@@ -119,7 +122,6 @@ async function editMessage(messageId: string) {
     func: (messageId) => {
       // find the message id and scroll to it
       const element = document.querySelector(`[data-message-id="${messageId}"]`);
-      console.log("element", element);
       if (element) {
 
         const buttonDiv = element.parentElement?.parentElement;
@@ -139,6 +141,45 @@ async function editMessage(messageId: string) {
           }, 100);
         }
         
+      }
+    },
+    args: [messageId]
+  });
+}
+
+
+async function respondToMessage(messageId: string) {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const currentTab = tabs[0];
+
+  await chrome.scripting.executeScript({
+    target: { tabId: currentTab.id ?? 0 },
+    func: (messageId) => {
+      // find the message id and scroll to it
+      const element = document.querySelector(`[data-message-id="${messageId}"]`);
+      if (element) {
+        const buttonDiv = element.parentElement?.parentElement;
+        if (buttonDiv) {
+          // First scroll to position
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          
+          // Wait a brief moment before clicking the edit button
+          setTimeout(() => {
+            const buttons = buttonDiv.querySelectorAll("button");
+            buttons[0].click(); // the edit message button
+            
+            // Add another scroll after a slight delay to maintain position
+            setTimeout(() => {
+
+              // clear the text area so the user can respond
+              const textArea = buttonDiv.querySelector("textarea");
+              if (textArea) {
+                  textArea.value = "";
+              }
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+          }, 100);
+        }
       }
     },
     args: [messageId]

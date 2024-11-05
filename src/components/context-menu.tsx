@@ -24,6 +24,10 @@ export default function ContextMenu({
     const editMessage = () => {
         chrome.runtime.sendMessage({ action: 'editMessage', messageId: messageId });
     }
+    const respondToMessage = () => {
+        chrome.runtime.sendMessage({ action: 'respondToMessage', messageId: messageId });
+    }
+
   return (
     <div
       style={{ 
@@ -44,7 +48,7 @@ export default function ContextMenu({
       )}
       <div className="mt-1 space-y-1">
         {role === "assistant" && (
-            <button className="w-full px-2 py-1.5 text-sm text-left text-gray-700 hover:bg-gray-50 rounded transition-colors">
+            <button className="w-full px-2 py-1.5 text-sm text-left text-gray-700 hover:bg-gray-50 rounded transition-colors" onClick={respondToMessage}>
                 Respond to this message
             </button>
         )}
