@@ -188,7 +188,8 @@ const ConversationTree = () => {
         x += nodeXSpacing * scale;
       }
       
-      usedPositions.add(`${Math.round(x)},${Math.round(y)}`);
+      usedPositions.add(`${Math.round(x)},${Math.round(y)}`)
+
       return { x, y };
     };
 
@@ -258,7 +259,7 @@ const ConversationTree = () => {
             style: { stroke: '#2196f3', strokeWidth: 2 }
           });
           
-          createChildNodes(child, position.x, yPos + nodeYSpacing);
+          createChildNodes(child, position.x, position.y + nodeYSpacing, 0.5);
         } else {
           
           child.children.forEach((grandChildId) => {
@@ -298,7 +299,7 @@ const ConversationTree = () => {
                   style: { stroke: '#2196f3', strokeWidth: 2 }
                 });
 
-                  createChildNodes(descendant, position.x, yPos + nodeYSpacing, 0.5);
+                  createChildNodes(descendant, position.x, position.y + nodeYSpacing, 0.5);
                 
               } else {
                 descendant.children.forEach((descId) => {
@@ -335,12 +336,11 @@ const ConversationTree = () => {
     newNodes.push(rootNode);
     createChildNodes(rootNode, rootPosition.x , rootPosition.y + nodeYSpacing);
 
-
-    // In your React component or other file
     const checkNodes = async (nodeIds: string[]) => {
+        // check if the nodes are in the DOM (to see which are currently visible to the user)
         const response = await chrome.runtime.sendMessage({
         action: "checkNodes",
-        nodeIds: nodeIds // e.g., ['node1', 'node2', 'node3']
+        nodeIds: nodeIds 
         });
         
         if (response.success) {
