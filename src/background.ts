@@ -1,4 +1,3 @@
-
 let storedRequestHeaders: chrome.webRequest.HttpHeader[] | null = null;
 
 function captureHeaders() {
@@ -22,7 +21,6 @@ chrome.runtime.onMessage.addListener(
       sendResponse({ headers: storedRequestHeaders });
     } 
     else if (request.action === "fetchConversationHistory") {
-      // Since fetchConversationHistory is async, we need to handle it differently
       fetchConversationHistory()
         .then(data => {
           sendResponse({ success: true, data });
@@ -30,7 +28,17 @@ chrome.runtime.onMessage.addListener(
         .catch(error => {
           sendResponse({ success: false, error: error.message });
         });
-      return true; // Important: return true to indicate we'll respond asynchronously
+      return true;
+    }
+    else if (request.action === "checkNodes") {
+      checkNodesExistence(request.nodeIds)
+        .then(existingNodes => {
+          sendResponse({ success: true, existingNodes });
+        })
+        .catch(error => {
+          sendResponse({ success: false, error: error.message });
+        });
+      return true; // Important for async response
     }
     return true;
   }
@@ -70,6 +78,29 @@ async function fetchConversationHistory() {
     return data;
   } catch (error) {
     console.error('Error in fetchConversationHistory:', error);
+    throw error;
+  }
+}
+
+async function checkNodesExistence(nodeIds: string[]) {
+  try {
+    // return true if the node does not exist in the DOM (thus hidden)
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const currentTab = tabs[0];
+    console.log("currentTab", currentTab);
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: currentTab.id ?? 0 },
+      func: (ids) => {
+        return ids.map(id => document.querySelector(`[data-message-id="${id}"]`) === null);
+      },
+      args: [nodeIds]  // Pass nodeIds as an argument to the injected function
+    });
+
+    console.log("results", results);
+    
+    return results[0].result;  // Returns array of nodeIds that exist in the DOM
+  } catch (error) {
+    console.error('Error in checkNodesExistence:', error);
     throw error;
   }
 }
