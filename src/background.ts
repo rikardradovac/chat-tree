@@ -40,6 +40,11 @@ chrome.runtime.onMessage.addListener(
         });
       return true; // Important for async response
     }
+    else if (request.action === "editMessage") {
+      editMessage(request.messageId);
+      sendResponse({ success: true });
+      return true;
+    }
     return true;
   }
 );
@@ -87,7 +92,6 @@ async function checkNodesExistence(nodeIds: string[]) {
     // return true if the node does not exist in the DOM (thus hidden)
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     const currentTab = tabs[0];
-    console.log("currentTab", currentTab);
     const results = await chrome.scripting.executeScript({
       target: { tabId: currentTab.id ?? 0 },
       func: (ids) => {
@@ -103,6 +107,42 @@ async function checkNodesExistence(nodeIds: string[]) {
     console.error('Error in checkNodesExistence:', error);
     throw error;
   }
+}
+
+async function editMessage(messageId: string) {
+
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const currentTab = tabs[0];
+
+  await chrome.scripting.executeScript({
+    target: { tabId: currentTab.id ?? 0 },
+    func: (messageId) => {
+      // find the message id and scroll to it
+      const element = document.querySelector(`[data-message-id="${messageId}"]`);
+      console.log("element", element);
+      if (element) {
+
+        const buttonDiv = element.parentElement?.parentElement;
+        if (buttonDiv) {
+          // First scroll to position
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          
+          // Wait a brief moment before clicking the edit button
+          setTimeout(() => {
+            const buttons = buttonDiv.querySelectorAll("button");
+            buttons[0].click(); // the edit message button
+            
+            // Add another scroll after a slight delay to maintain position
+            setTimeout(() => {
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+          }, 100);
+        }
+        
+      }
+    },
+    args: [messageId]
+  });
 }
 
 captureHeaders();

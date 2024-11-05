@@ -49,7 +49,7 @@ export default function ContextMenu({
             </button>
         )}
         {role === "user" && (
-            <button className="w-full px-2 py-1.5 text-sm text-left text-gray-700 hover:bg-gray-50 rounded transition-colors">
+            <button className="w-full px-2 py-1.5 text-sm text-left text-gray-700 hover:bg-gray-50 rounded transition-colors" onClick={editMessage}>
                 Edit this message
             </button>
         )}
