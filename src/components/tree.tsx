@@ -15,6 +15,7 @@ import {
 } from '@xyflow/react';
 import ContextMenu from './context-menu';
 import '@xyflow/react/dist/style.css';
+import dagre from '@dagrejs/dagre';
 
 interface Author {
     role: string;
@@ -107,6 +108,22 @@ interface ConversationData {
     async_status: string | null;
 }
 
+type MenuState = {
+    messageId: string;
+    role: string;
+    top: number | boolean;
+    left: number | boolean;
+    right: number | boolean;
+    bottom: number | boolean;
+  } | null;
+
+
+
+
+const dagreGraph = new dagre.graphlib.Graph().setGraph({}).setDefaultEdgeLabel(() => ({}));
+const nodeWidth = 300;
+const nodeHeight = 120;
+
 
 
 const CustomNode = ({ data }: { data: any }) => {   
@@ -114,8 +131,8 @@ const CustomNode = ({ data }: { data: any }) => {
     <div className={`px-4 py-2 shadow-lg rounded-lg border ${
       data.role === 'user' ? 'bg-blue-50 border-blue-200' : 'bg-purple-50 border-purple-200'
     } ${data.hidden ? 'grayscale' : ''}`} style={{
-      width: '300px',
-      height: '120px', 
+      width: nodeWidth,
+      height: nodeHeight,
       position: 'relative',
       opacity: data.hidden ? 0.4 : 1,
       background: data.hidden ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px)' : undefined
@@ -146,21 +163,13 @@ const CustomNode = ({ data }: { data: any }) => {
   );
 };
 
-type MenuState = {
-    messageId: string;
-    role: string;
-    top: number | boolean;
-    left: number | boolean;
-    right: number | boolean;
-    bottom: number | boolean;
-  } | null;
-
-const nodeXSpacing = 650;
-const nodeYSpacing = 200;
-
 const nodeTypes: NodeTypes = {
-  custom: CustomNode,
-};
+    custom: CustomNode,
+  };
+
+
+
+
 
 const ConversationTree = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -174,24 +183,6 @@ const ConversationTree = () => {
     const mapping = conversationData.mapping;
     const newNodes = new Array<Node>();
     const newEdges = new Array<Edge>();
-    
-    // Keep track of used positions to prevent overlapping
-    const usedPositions = new Set<string>();
-    
-    // Helper to find next available position
-    const findAvailablePosition = (baseX: number, baseY: number, scale: number): { x: number, y: number} => {
-      let x = baseX;
-      let y = baseY;
-      
-      // Keep trying positions until we find an unused one
-      while (usedPositions.has(`${Math.round(x)},${Math.round(y)}`)) {
-        x += nodeXSpacing * scale;
-      }
-      
-      usedPositions.add(`${Math.round(x)},${Math.round(y)}`)
-
-      return { x, y };
-    };
 
     const findFirstContentParent = (node: Node): Node | null => {
         // If no children, return null
@@ -216,11 +207,8 @@ const ConversationTree = () => {
         return null;
     }
 
-    const createChildNodes = (node: Node, baseX = 0, yPos = 0, scale = 1) => {
-      // the scale is used to place the parent node in the middle of its children and to not push the children too far apart
+    const createChildNodes = (node: Node) => {
       if (node.children.length === 0) return;
-
-      baseX = baseX - (nodeXSpacing * scale * (node.children.length - 1)) / 2;
 
       node.children.forEach((childId) => {
         const child = mapping[childId];
@@ -230,15 +218,8 @@ const ConversationTree = () => {
             child.message.author.role !== 'system' && 
             child.message.author.role !== 'tool' &&
             child.message.recipient === 'all') {
-        
-          const position = findAvailablePosition(
-            baseX,
-            yPos,
-            scale
-          );
-          
+
           child.parent = node.id;
-          child.position = position;
           child.type = 'custom';
           const role = child.message.author.role;
           const content = child.message.content.parts[0];
@@ -259,7 +240,7 @@ const ConversationTree = () => {
             style: { stroke: '#2196f3', strokeWidth: 2 }
           });
           
-          createChildNodes(child, position.x, position.y + nodeYSpacing, 0.5);
+          createChildNodes(child);
         } else {
           
           child.children.forEach((grandChildId) => {
@@ -270,15 +251,9 @@ const ConversationTree = () => {
                   descendant.message.author.role !== 'system' && 
                   descendant.message.author.role !== 'tool' &&
                   descendant.message.recipient === 'all') {
-                
-                const position = findAvailablePosition(
-                  baseX,
-                  yPos,
-                  scale
-                );
+            
                 
                 descendant.parent = node.id;
-                descendant.position = position;
                 descendant.type = 'custom';
                 const role = descendant.message.author.role;
                 const content = descendant.message.content.parts[0];
@@ -299,7 +274,7 @@ const ConversationTree = () => {
                   style: { stroke: '#2196f3', strokeWidth: 2 }
                 });
 
-                  createChildNodes(descendant, position.x, position.y + nodeYSpacing, 0.5);
+                  createChildNodes(descendant);
                 
               } else {
                 descendant.children.forEach((descId) => {
@@ -313,16 +288,11 @@ const ConversationTree = () => {
       });
     };
 
-    // Root node positioning
     let rootNode = Object.values(mapping).find(node => !node.parent) as Node | null;
     if (!rootNode) return;
 
     rootNode = findFirstContentParent(rootNode);
     if (!rootNode) return;
-
-    const rootPosition = { x: window.innerWidth / 2, y: 50 };
-    usedPositions.add(`${Math.round(rootPosition.x)},${Math.round(rootPosition.y)}`);
-    rootNode.position = rootPosition;
     
     rootNode.type = 'custom';
     const role = rootNode.message!.author.role;
@@ -334,7 +304,7 @@ const ConversationTree = () => {
     };
     
     newNodes.push(rootNode);
-    createChildNodes(rootNode, rootPosition.x , rootPosition.y + nodeYSpacing);
+    createChildNodes(rootNode);
 
     const checkNodes = async (nodeIds: string[]) => {
         // check if the nodes are in the DOM (to see which are currently visible to the user)
@@ -357,9 +327,35 @@ const ConversationTree = () => {
             newNodes[index]!.data!.hidden = hidden;
         }
     });
-    
 
-    setNodes(newNodes as any);
+    newNodes.forEach((node) => {
+        dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+    });
+
+    newEdges.forEach((edge) => {
+        dagreGraph.setEdge(edge.source, edge.target);
+      });
+
+    dagre.layout(dagreGraph);
+     
+      const newNodesWithPositions = newNodes.map((node) => {
+        const nodeWithPosition = dagreGraph.node(node.id);
+        const newNode = {
+          ...node,
+          targetPosition: 'top',
+          sourcePosition: 'bottom',
+          // We are shifting the dagre node position (anchor=center center) to the top left
+          // so it matches the React Flow node anchor point (top left).
+          position: {
+            x: nodeWithPosition.x - nodeWidth / 2,
+            y: nodeWithPosition.y - nodeHeight / 2,
+          },
+        };
+     
+        return newNode;
+      });
+     
+    setNodes(newNodesWithPositions as any);
     setEdges(newEdges as any);
   };
 

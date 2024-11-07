@@ -13,12 +13,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^1.1.4",
     "@xyflow/react": "^12.3.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.279",
+    "@types/dagre": "^0.7.52",
     "@types/node": "^22.8.1",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
