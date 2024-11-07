@@ -81,7 +81,7 @@ chrome.runtime.onMessage.addListener(
       return true;
     }
     else if (request.action === "respondToMessage") {
-      respondToMessage(request.messageId);
+      respondToMessage(request.childrenIds);
       sendResponse({ success: true });
       return true;
     }
@@ -191,20 +191,26 @@ async function editMessage(messageId: string) {
 }
 
 
-async function respondToMessage(messageId: string) {
+async function respondToMessage(childrenIds: string[]) {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const currentTab = tabs[0];
 
   await chrome.scripting.executeScript({
     target: { tabId: currentTab.id ?? 0 },
-    func: (messageId) => {
+    func: (childrenIds) => {
+      let element = null;
+
+      // since not all childrenIds are visible, we need to find the one that is
+      for (const messageId of childrenIds) {
+        element = document.querySelector(`[data-message-id="${messageId}"]`);
+        if (element) {
+          break;
+        }
+      }
       // find the message id and scroll to it
-      const element = document.querySelector(`[data-message-id="${messageId}"]`);
       if (element) {
         const buttonDiv = element.parentElement?.parentElement;
         if (buttonDiv) {
-          // First scroll to position
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
           
           // Wait a brief moment before clicking the edit button
           setTimeout(() => {
@@ -218,6 +224,8 @@ async function respondToMessage(messageId: string) {
               const textArea = buttonDiv.querySelector("textarea");
               if (textArea) {
                   textArea.value = "";
+
+                  textArea.dispatchEvent(new Event('input', { bubbles: true }));
               }
               element.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, 100);
@@ -225,7 +233,7 @@ async function respondToMessage(messageId: string) {
         }
       }
     },
-    args: [messageId]
+    args: [childrenIds]
   });
 }
 

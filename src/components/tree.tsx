@@ -110,6 +110,7 @@ interface ConversationData {
 
 type MenuState = {
     messageId: string;
+    childrenIds: string[];
     role: string;
     top: number | boolean;
     left: number | boolean;
@@ -399,7 +400,8 @@ const ConversationTree = () => {
       const nodeId = node.data?.id ?? '';
       if (pane) {
         setMenu({
-          messageId: node.data?.role === 'user' ? nodeId : node.children[0] ?? '',
+          messageId: nodeId,
+          childrenIds: node.children,
           role: node.data?.role ?? '',
           top: event.clientY < pane.height - 200 && event.clientY ? event.clientY - 48 : false,
           left: event.clientX < pane.width - 200 && event.clientX ? event.clientX : false,
