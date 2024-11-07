@@ -1,9 +1,44 @@
 let storedRequestHeaders: chrome.webRequest.HttpHeader[] | null = null;
 
+// Function to save headers to chrome.storage
+function saveRequestHeaders(headers: chrome.webRequest.HttpHeader[]) {
+  chrome.storage.local.set({ storedRequestHeaders: headers }, () => {
+    if (chrome.runtime.lastError) {
+      console.error('Error saving headers:', chrome.runtime.lastError);
+    }
+  });
+}
+
+// Function to load headers from chrome.storage
+function loadRequestHeaders(): Promise<chrome.webRequest.HttpHeader[] | null> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['storedRequestHeaders'], (result) => {
+      if (chrome.runtime.lastError) {
+        console.error('Error loading headers:', chrome.runtime.lastError);
+        resolve(null);
+      } else {
+        resolve(result.storedRequestHeaders || null);
+      }
+    });
+  });
+}
+
 function captureHeaders() {
   chrome.webRequest.onBeforeSendHeaders.addListener(
     (details) => {
-      storedRequestHeaders = details.requestHeaders || null;
+      if (details.requestHeaders?.some(h => h.name.toLowerCase() === 'authorization')) {
+        saveRequestHeaders(details.requestHeaders);
+      }
+    },
+    { urls: ["https://chatgpt.com/backend-api/*"] },
+    ["requestHeaders"]
+  );
+
+  chrome.webRequest.onSendHeaders.addListener(
+    (details) => {
+      if (details.requestHeaders?.some(h => h.name.toLowerCase() === 'authorization')) {
+        saveRequestHeaders(details.requestHeaders);
+      }
     },
     { urls: ["https://chatgpt.com/backend-api/*"] },
     ["requestHeaders"]
@@ -56,9 +91,17 @@ chrome.runtime.onMessage.addListener(
 
 // fetch the conversation history
 async function fetchConversationHistory() {
-  if (!storedRequestHeaders) {
-    console.log('No stored headers available');
-    return null;
+  for (let i = 0; i < 3; i++) {
+    storedRequestHeaders = await loadRequestHeaders();
+    if (storedRequestHeaders?.some(h => h.name.toLowerCase() === 'authorization')) {
+      break;
+    }
+    await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms before retry
+  }
+
+  if (!storedRequestHeaders?.some(h => h.name.toLowerCase() === 'authorization')) {
+    console.error('No authorization header available');
+    throw new Error('Authorization header not found');
   }
 
   try {
