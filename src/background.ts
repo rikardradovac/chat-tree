@@ -84,6 +84,10 @@ chrome.runtime.onMessage.addListener(
       respondToMessage(request.childrenIds);
       sendResponse({ success: true });
       return true;
+    } else if (request.action === "executeSteps") {
+      selectBranch(request.steps);
+      sendResponse({ success: true });
+      return true;
     }
     return true;
   }
@@ -234,6 +238,65 @@ async function respondToMessage(childrenIds: string[]) {
       }
     },
     args: [childrenIds]
+  });
+}
+
+async function selectBranch(stepsToTake: any[]) {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const currentTab = tabs[0];
+
+  await chrome.scripting.executeScript({
+    target: { tabId: currentTab.id ?? 0 },
+    func: (stepsToTake) => {
+      const waitForDomChange = (element: Element): Promise<void> => {
+        return new Promise((resolve, reject) => {
+          const maxWaitTime = 5000; // 5 seconds maximum wait
+          const timeout = setTimeout(() => {
+            observer.disconnect();
+            reject(new Error('Timeout waiting for DOM changes'));
+          }, maxWaitTime);
+
+          const observer = new MutationObserver((_mutations, obs) => {
+            clearTimeout(timeout);
+            obs.disconnect();
+            resolve();
+          });
+
+          observer.observe(element, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            characterData: true
+          });
+        });
+      };
+
+      // Process steps sequentially using async/await
+      const processSteps = async () => {
+        for (const step of stepsToTake) {
+          const element = document.querySelector(`[data-message-id="${step.nodeId}"]`);
+          if (element) {
+            const buttonDiv = element.parentElement?.parentElement;
+            if (buttonDiv) {
+              const buttons = buttonDiv.querySelectorAll("button");
+
+              // 0 is edit, 1 is left and 2 is right
+              const buttonIndex = step.stepsRight > 0 ? 2 : 1;
+              buttons[buttonIndex].click();
+              
+              try {
+                await waitForDomChange(buttonDiv);
+              } catch (error) {
+                console.error('Error waiting for DOM change:', error);
+              }
+            }
+          }
+        }
+      };
+
+      processSteps();
+    },
+    args: [stepsToTake]
   });
 }
 

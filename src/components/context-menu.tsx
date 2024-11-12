@@ -1,3 +1,4 @@
+
 interface ContextMenuProps {
   role?: string;
   messageId?: string;
@@ -7,6 +8,8 @@ interface ContextMenuProps {
   right: number | boolean;
   bottom: number | boolean;
   onClick?: () => void;
+  onNodeClick: (messageId: string) => void;
+  onRefresh: () => void;
 }
 
 export default function ContextMenu({
@@ -18,9 +21,10 @@ export default function ContextMenu({
   right,
   bottom,
   onClick,
+  onNodeClick,
+  onRefresh,
   ...props
 }: ContextMenuProps) {
-
 
 
     const editMessage = () => {
@@ -28,6 +32,19 @@ export default function ContextMenu({
     }
     const respondToMessage = () => {
         chrome.runtime.sendMessage({ action: 'respondToMessage', childrenIds: childrenIds });
+    }
+
+    const selectBranch = () => {
+        if (messageId) {
+            const steps = onNodeClick(messageId);
+            chrome.runtime.sendMessage({ action: "executeSteps", steps: steps })
+            .then(() => {
+                onRefresh();
+            })
+            .catch((error) => {
+                console.error('Error executing steps:', error);
+            });
+        }
     }
 
   return (
@@ -49,6 +66,14 @@ export default function ContextMenu({
         </div>
       )}
       <div className="mt-1 space-y-1">
+        <button className="w-full px-2 py-1.5 text-sm text-left text-gray-700 hover:bg-gray-50 rounded transition-colors" onClick={selectBranch}>
+            Select
+            {messageId && (
+                <span className="text-xs text-gray-500">
+                    {messageId}
+                </span>
+            )}
+        </button>
         {role === "assistant" && (
             <button className="w-full px-2 py-1.5 text-sm text-left text-gray-700 hover:bg-gray-50 rounded transition-colors" onClick={respondToMessage}>
                 Respond to this message

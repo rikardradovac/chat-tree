@@ -180,6 +180,23 @@ const ConversationTree = () => {
   const [menu, setMenu] = useState<MenuState>(null);
   const ref = useRef<HTMLDivElement>(null);
 
+
+  const checkNodes = async (nodeIds: string[]) => {
+        // check if the nodes are in the DOM (to see which are currently visible to the user)
+        const response = await chrome.runtime.sendMessage({
+        action: "checkNodes",
+        nodeIds: nodeIds 
+        });
+        
+        if (response.success) {
+        console.log('Existing nodes:', response.existingNodes);
+        return response.existingNodes;
+        } else {
+        console.error('Error checking nodes:', response.error);
+            throw new Error(response.error);
+        }
+    };
+
   const createNodesInOrder = async (conversationData: ConversationData) => {
     const mapping = conversationData.mapping;
     const newNodes = new Array<Node>();
@@ -228,7 +245,8 @@ const ConversationTree = () => {
             label: content,
             role: role,
             timestamp: child.message.create_time ?? undefined,
-            id: child.id
+            id: child.id,
+            hidden: true // default to hidden
           };
           
           newNodes.push(child);
@@ -262,7 +280,8 @@ const ConversationTree = () => {
                   label: content,
                   role: role,
                   timestamp: descendant.message.create_time ?? undefined,
-                  id: descendant.id
+                  id: descendant.id,
+                  hidden: true // default to hidden
                 };
                 
                 newNodes.push(descendant);
@@ -306,29 +325,14 @@ const ConversationTree = () => {
     
     newNodes.push(rootNode);
     createChildNodes(rootNode);
-
-    const checkNodes = async (nodeIds: string[]) => {
-        // check if the nodes are in the DOM (to see which are currently visible to the user)
-        const response = await chrome.runtime.sendMessage({
-        action: "checkNodes",
-        nodeIds: nodeIds 
-        });
-        
-        if (response.success) {
-        console.log('Existing nodes:', response.existingNodes);
-        return response.existingNodes;
-        } else {
-        console.error('Error checking nodes:', response.error);
-            throw new Error(response.error);
-        }
-    };
+    
     const existingNodes = await checkNodes(newNodes.map(node => node.id));
     existingNodes.forEach((hidden: boolean, index: number) => {
         if (newNodes[index]) {
             newNodes[index]!.data!.hidden = hidden;
         }
     });
-
+    
     newNodes.forEach((node) => {
         dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
     });
@@ -378,6 +382,7 @@ const ConversationTree = () => {
     };
     
     fetchData();
+    
 
   }, []);
 
@@ -387,6 +392,8 @@ const ConversationTree = () => {
       createNodesInOrder(conversationData).then().catch();
     }
   }, [conversationData]);
+
+  
 
 
   const onNodeContextMenu = useCallback(
@@ -417,11 +424,92 @@ const ConversationTree = () => {
   // Close the context menu if it's open whenever the window is clicked.
   const onPaneClick = useCallback(() => setMenu(null), [setMenu]);
 
+    // update the visibility of the nodes based on the DOM
+    const updateNodesVisibility = useCallback(async () => {
+        const nodeIds = nodes.map((node: Node) => node.id);
+        const existingNodes = await checkNodes(nodeIds);
+        
+        setNodes((prevNodes: any) => 
+            prevNodes.map((node: Node, index: number) => ({
+                ...node,
+                data: {
+                    ...node.data,
+                    hidden: existingNodes[index]
+                }
+            }))
+        );
+    }, [nodes]);
+
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
     [setEdges],
   );
+
+  const calculateSteps = useCallback((targetId: string) => {
+    const stepsToTake: Array<{
+      nodeId: string;
+      stepsLeft: number;
+      stepsRight: number;
+    }> = [];
+
+
+    let currentNode: any = nodes.find((node: Node) => node.id === targetId);
+    if (!currentNode) return [];
+    console.log("currentNode", currentNode);
+    while (currentNode?.data?.hidden) {
+      const parent: any = nodes.find((n: Node) => n.id === currentNode?.parent);
+      if (!parent) break;
+      console.log("parent", parent);
+
+      const childIndex = parent.children.indexOf(currentNode.id);
+      const activeChildIndex = parent.children.findIndex(
+        (childId: any) => (nodes as any).find((node: any) => node.id === childId)?.data?.hidden === false
+      );
+
+      if (parent.children.length > 1) {
+        console.log("activeChildIndex", activeChildIndex, "childIndex", childIndex);
+
+        // the case when the selected node is far down in hidden branch
+        if (activeChildIndex === -1) {
+          for (let i = 0; i < childIndex; i++) {
+            stepsToTake.push({
+              nodeId: parent.children[i],
+              stepsLeft: -1,
+              stepsRight: 1,
+            });
+          }
+        } else {
+            // if the wanted index is greater than the active index, we need to move right
+          const moveRight = childIndex > activeChildIndex;
+          const steps = Math.abs(activeChildIndex - childIndex);
+
+          for (let i = 0; i < steps; i++) {
+            stepsToTake.push({
+              nodeId: parent.children[activeChildIndex],
+              stepsLeft: moveRight ? -1 : 1,
+              stepsRight: moveRight ? 1 : -1,
+            });
+          }
+        }
+      }
+      currentNode = parent;
+    }
+
+    return stepsToTake.reverse();
+  }, [nodes]);
+
+  const handleNodeClick = useCallback((messageId: string) => {
+    const steps = calculateSteps(messageId);
+    console.log('Steps to take:', steps);
+    // Here you can execute the steps or send them to your extension
+    // For example:
+    chrome.runtime.sendMessage({
+      action: "executeSteps",
+      steps: steps
+    });
+    setMenu(null); // Close the context menu after clicking
+  }, [calculateSteps]);
 
   if (isLoading) {
     return (
@@ -462,7 +550,12 @@ const ConversationTree = () => {
           className="bg-white rounded-lg shadow-lg"
         />
         <Background variant={BackgroundVariant.Dots} gap={12} size={1} color="#f1f1f1" />
-        {menu && <ContextMenu onClick={onPaneClick} {...menu} />}
+        {menu && <ContextMenu 
+          onClick={onPaneClick} 
+          onNodeClick={handleNodeClick} 
+          onRefresh={updateNodesVisibility}
+          {...menu} 
+        />}
       </ReactFlow>
     </div>
   );
