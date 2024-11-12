@@ -189,7 +189,6 @@ const ConversationTree = () => {
         });
         
         if (response.success) {
-        console.log('Existing nodes:', response.existingNodes);
         return response.existingNodes;
         } else {
         console.error('Error checking nodes:', response.error);
@@ -447,6 +446,9 @@ const ConversationTree = () => {
   );
 
   const calculateSteps = useCallback((targetId: string) => {
+    // create an array of steps for the background script to execute. This will be the order of clicks on
+    // the different chat nodes to get to the target branch
+    // we will iterate from the clicked node and search up the tree until a visible node is found
     const stepsToTake: Array<{
       nodeId: string;
       stepsLeft: number;
@@ -456,19 +458,19 @@ const ConversationTree = () => {
 
     let currentNode: any = nodes.find((node: Node) => node.id === targetId);
     if (!currentNode) return [];
-    console.log("currentNode", currentNode);
+
+    // search for the parent of the target node until we find a visible node
     while (currentNode?.data?.hidden) {
       const parent: any = nodes.find((n: Node) => n.id === currentNode?.parent);
       if (!parent) break;
-      console.log("parent", parent);
 
       const childIndex = parent.children.indexOf(currentNode.id);
       const activeChildIndex = parent.children.findIndex(
         (childId: any) => (nodes as any).find((node: any) => node.id === childId)?.data?.hidden === false
       );
 
+      // if the parent has more than one child, we need to find the index of the first visible child
       if (parent.children.length > 1) {
-        console.log("activeChildIndex", activeChildIndex, "childIndex", childIndex);
 
         // the case when the selected node is far down in hidden branch
         if (activeChildIndex === -1) {
@@ -501,9 +503,7 @@ const ConversationTree = () => {
 
   const handleNodeClick = useCallback((messageId: string) => {
     const steps = calculateSteps(messageId);
-    console.log('Steps to take:', steps);
-    // Here you can execute the steps or send them to your extension
-    // For example:
+    // send the steps to the background script which will execute
     chrome.runtime.sendMessage({
       action: "executeSteps",
       steps: steps

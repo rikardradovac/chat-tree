@@ -68,11 +68,6 @@ export default function ContextMenu({
       <div className="mt-1 space-y-1">
         <button className="w-full px-2 py-1.5 text-sm text-left text-gray-700 hover:bg-gray-50 rounded transition-colors" onClick={selectBranch}>
             Select
-            {messageId && (
-                <span className="text-xs text-gray-500">
-                    {messageId}
-                </span>
-            )}
         </button>
         {role === "assistant" && (
             <button className="w-full px-2 py-1.5 text-sm text-left text-gray-700 hover:bg-gray-50 rounded transition-colors" onClick={respondToMessage}>
