@@ -88,6 +88,10 @@ chrome.runtime.onMessage.addListener(
       selectBranch(request.steps);
       sendResponse({ success: true });
       return true;
+    } else if (request.action === "goToTarget") {
+      goToTarget(request.targetId);
+      sendResponse({ success: true });
+      return true;
     }
     return true;
   }
@@ -298,6 +302,22 @@ async function selectBranch(stepsToTake: any[]) {
     },
     args: [stepsToTake]
   });
+}
+
+async function goToTarget(targetId: string) {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const currentTab = tabs[0];
+
+  await chrome.scripting.executeScript({
+    target: { tabId: currentTab.id ?? 0 },
+    func: (targetId) => {
+      const element = document.querySelector(`[data-message-id="${targetId}"]`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    },
+    args: [targetId]
+  })
 }
 
 captureHeaders();

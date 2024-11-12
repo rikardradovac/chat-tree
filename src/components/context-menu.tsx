@@ -40,6 +40,8 @@ export default function ContextMenu({
             chrome.runtime.sendMessage({ action: "executeSteps", steps: steps })
             .then(() => {
                 onRefresh();
+                // scroll to the target node after the steps are executed
+                chrome.runtime.sendMessage({ action: "goToTarget", targetId: messageId });
             })
             .catch((error) => {
                 console.error('Error executing steps:', error);
