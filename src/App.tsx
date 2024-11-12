@@ -3,9 +3,11 @@ import ChatGraph from "./components/tree"
 
 function App() {
   return (
-    <div className="w-screen h-screen min-w-[800px] min-h-[800px]">
+    <div className="w-full h-screen flex flex-col">
       <Header />
-      <ChatGraph />
+      <div className="flex-1 overflow-hidden">
+        <ChatGraph />
+      </div>
     </div>
   );
 }

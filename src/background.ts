@@ -361,3 +361,20 @@ async function goToTarget(targetId: string) {
 }
 
 captureHeaders();
+
+// Add this to the end of background.ts
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (
+    changeInfo.status === 'complete' &&
+    tab.url?.includes('chat.openai.com')
+  ) {
+    // Open side panel when on chat.openai.com
+    chrome.sidePanel.open({ tabId });
+  }
+});
+
+// Optional: Set which URLs the side panel can appear on
+chrome.sidePanel.setOptions({
+  path: 'index.html',
+  enabled: true
+});
