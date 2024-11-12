@@ -29,5 +29,12 @@
     ],
     "host_permissions": [
         "https://chatgpt.com/backend-api/*"
-    ]
+    ],
+    "content_security_policy": {
+        "extension_pages": "script-src 'self'; object-src 'self';"
+    },
+    "web_accessible_resources": [{
+        "resources": ["logo16.png", "logo48.png", "logo128.png"],
+        "matches": ["https://chat.openai.com/*"]
+    }]
 }

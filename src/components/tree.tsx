@@ -203,27 +203,50 @@ const ConversationTree = () => {
     const newEdges = new Array<Edge>();
 
     const findFirstContentParent = (node: Node): Node | null => {
-        // If no children, return null
-        if (node.children.length === 0) return null;
-
-        for (const childId of node.children) {
-            const child = mapping[childId];
+        // Use a queue to store nodes to process
+        const queue: Node[] = [...node.children.map(childId => mapping[childId])];
+        
+        while (queue.length > 0) {
+            const currentNode = queue.shift()!;
             
-            // If the child has content and is a user message, return it
-            if (child.message?.content?.parts?.[0] && child.message.author.role === "user") {
-                return child;
+            // If the current node has content and is a user message, we have found the first content parent
+            if (currentNode.message?.content?.parts?.[0] && 
+                currentNode.message.author.role === "user") {
+                let tempParent = mapping[currentNode.parent!];
+                
+                // For each child of the temp parent
+                tempParent.children.forEach((childId, index) => {
+                    let currentChild = mapping[childId];
+                    
+                    // Keep traversing down until we find a valid node
+                    while (currentChild && !(currentChild.message?.content?.parts?.[0] && 
+                           currentChild.message.author.role !== 'system' && 
+                           currentChild.message.author.role !== 'tool' &&
+                           currentChild.message.recipient === 'all')) {
+                        // If current child is invalid and has children, move to its first child
+                        if (currentChild.children.length > 0) {
+                            currentChild = mapping[currentChild.children[0]];
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    // If we found a valid child, update the temp parent's children array
+                    if (currentChild) {
+                        tempParent.children[index] = currentChild.id;
+                        currentChild.parent = tempParent.id;
+                    }
+                });
+                
+                return tempParent;
             }
-
-            // If the child has content, search for it in its children
-            const foundInChild = findFirstContentParent(child);
-            if (foundInChild && foundInChild.parent) {
-                // Return the parent of the child that has content so we can use it as the root
-                return mapping[foundInChild.parent];
-            }
+            
+            // Add children to the queue
+            queue.push(...currentNode.children.map(childId => mapping[childId]));
         }
         
         return null;
-    }
+    };
 
     const createChildNodes = (node: Node) => {
       if (node.children.length === 0) return;
@@ -311,9 +334,10 @@ const ConversationTree = () => {
     let rootNode = Object.values(mapping).find(node => !node.parent) as Node | null;
     if (!rootNode) return;
 
+
     rootNode = findFirstContentParent(rootNode);
     if (!rootNode) return;
-    
+    log(`this is rootNode ${JSON.stringify(rootNode)} in createNodesInOrder`);
     rootNode.type = 'custom';
     const role = rootNode.message!.author.role;
     const content = role !== 'system' ? rootNode.message!.content.parts![0] : 'Start of your conversation';
@@ -395,6 +419,16 @@ const ConversationTree = () => {
 
   
 
+  const log = (message: any) => {
+    // Log to background console
+    chrome.runtime.sendMessage({ 
+        action: 'log', 
+        message: message 
+    });
+    // Also log to regular console
+    console.log('[ChatTree]', message);
+  };
+
 
   const onNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node) => {
@@ -459,20 +493,23 @@ const ConversationTree = () => {
 
 
     let currentNode: any = nodes.find((node: Node) => node.id === targetId);
+    log(`this is nodes ${JSON.stringify(nodes)} in calculateSteps`);
     if (!currentNode) return [];
-
+    log(`this is currentNode ${JSON.stringify(currentNode)} in calculateSteps`);
     // search for the parent of the target node until we find a visible node
     while (currentNode?.data?.hidden) {
       const parent: any = nodes.find((n: Node) => n.id === currentNode?.parent);
       if (!parent) break;
-
+      log(`this is parent ${JSON.stringify(parent)} in calculateSteps`);
       const childIndex = parent.children.indexOf(currentNode.id);
       const activeChildIndex = parent.children.findIndex(
         (childId: any) => (nodes as any).find((node: any) => node.id === childId)?.data?.hidden === false
       );
+      log(`this is activeChildIndex ${activeChildIndex} in calculateSteps`);
 
       // if the parent has more than one child, we need to find the index of the first visible child
       if (parent.children.length > 1) {
+        log(`this is parent.children.length ${parent.children.length} in calculateSteps`);
 
         // the case when the selected node is far down in hidden branch
         if (activeChildIndex === -1) {
@@ -500,17 +537,16 @@ const ConversationTree = () => {
       currentNode = parent;
     }
 
-    return stepsToTake.reverse();
+    
+    log(`this is stepsToTake ${JSON.stringify(stepsToTake)} in calculateSteps`);
+    stepsToTake.reverse();
+    return stepsToTake;
   }, [nodes]);
 
   const handleNodeClick = useCallback((messageId: string) => {
-    const steps = calculateSteps(messageId);
-    // send the steps to the background script which will execute
-    chrome.runtime.sendMessage({
-      action: "executeSteps",
-      steps: steps
-    });
     setMenu(null); // Close the context menu after clicking
+    return calculateSteps(messageId);
+
   }, [calculateSteps]);
 
   if (isLoading) {

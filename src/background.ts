@@ -1,8 +1,6 @@
-let storedRequestHeaders: chrome.webRequest.HttpHeader[] | null = null;
-
 // Function to save headers to chrome.storage
 function saveRequestHeaders(headers: chrome.webRequest.HttpHeader[]) {
-  chrome.storage.local.set({ storedRequestHeaders: headers }, () => {
+  chrome.storage.session.set({ storedRequestHeaders: headers }, () => {
     if (chrome.runtime.lastError) {
       console.error('Error saving headers:', chrome.runtime.lastError);
     }
@@ -12,7 +10,7 @@ function saveRequestHeaders(headers: chrome.webRequest.HttpHeader[]) {
 // Function to load headers from chrome.storage
 function loadRequestHeaders(): Promise<chrome.webRequest.HttpHeader[] | null> {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['storedRequestHeaders'], (result) => {
+    chrome.storage.session.get(['storedRequestHeaders'], (result) => {
       if (chrome.runtime.lastError) {
         console.error('Error loading headers:', chrome.runtime.lastError);
         resolve(null);
@@ -45,15 +43,14 @@ function captureHeaders() {
   );
 }
 
-function getRequestHeaders(): chrome.webRequest.HttpHeader[] | null {
-  return storedRequestHeaders;
-}
-
 // Add message listener to handle requests for headers and conversation history
 chrome.runtime.onMessage.addListener(
   (request, _sender, sendResponse) => {
     if (request.action === "getHeaders") {
-      sendResponse({ headers: storedRequestHeaders });
+      loadRequestHeaders().then(headers => {
+        sendResponse({ headers });
+      });
+      return true;
     } 
     else if (request.action === "fetchConversationHistory") {
       fetchConversationHistory()
@@ -103,15 +100,16 @@ chrome.runtime.onMessage.addListener(
 
 // fetch the conversation history
 async function fetchConversationHistory() {
+  let headers = null;
   for (let i = 0; i < 3; i++) {
-    storedRequestHeaders = await loadRequestHeaders();
-    if (storedRequestHeaders?.some(h => h.name.toLowerCase() === 'authorization')) {
+    headers = await loadRequestHeaders();
+    if (headers?.some(h => h.name.toLowerCase() === 'authorization')) {
       break;
     }
-    await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms before retry
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
 
-  if (!storedRequestHeaders?.some(h => h.name.toLowerCase() === 'authorization')) {
+  if (!headers?.some(h => h.name.toLowerCase() === 'authorization')) {
     console.error('No authorization header available');
     throw new Error('Authorization header not found');
   }
@@ -129,14 +127,14 @@ async function fetchConversationHistory() {
     const url = new URL(currentTab.url);
     const conversationId = url.pathname.split('/').pop();
 
-    const headers = new Headers();
-    storedRequestHeaders.forEach(header => {
-      headers.append(header.name, header.value || '');
+    const headersList = new Headers();
+    headers.forEach(header => {
+      headersList.append(header.name, header.value || '');
     });
 
     const response = await fetch(`https://chatgpt.com/backend-api/conversation/${conversationId}`, {
       method: 'GET',
-      headers,
+      headers: headersList,
     });
     
     const data = await response.json();

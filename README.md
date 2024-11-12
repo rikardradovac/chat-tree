@@ -78,3 +78,21 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 If you find this tool useful, please star the repository! ⭐
+
+## 🔐 Security & Privacy
+
+This extension requires the following permissions to function:
+
+- **storage**: To save your visualization preferences
+- **tabs**: To access the current ChatGPT conversation
+- **webRequest**: To monitor ChatGPT API requests for conversation data
+- **scripting**: To inject the visualization interface
+- **activeTab**: To interact with the current ChatGPT tab
+
+This extension requires the `webRequest` permission to:
+- Capture authentication headers only from chat.openai.com
+- Enable local API calls to fetch conversation history
+- Headers are stored securely in your browser's session
+- No data is sent to external servers
+
+All data processing happens locally in your browser. No data is sent to external servers.
