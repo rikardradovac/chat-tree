@@ -10,7 +10,7 @@ function Header() {
             className="h-6 w-6 opacity-80"
           />
           <span className="font-medium text-slate-600 text-sm">
-            ChatGPT Visualizer
+            ChatTree
           </span>
         </div>
       </div>
