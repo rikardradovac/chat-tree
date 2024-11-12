@@ -1,4 +1,3 @@
-
 interface ContextMenuProps {
   role?: string;
   messageId?: string;
@@ -7,6 +6,7 @@ interface ContextMenuProps {
   left: number | boolean;
   right: number | boolean;
   bottom: number | boolean;
+  hidden?: boolean;
   onClick?: () => void;
   onNodeClick: (messageId: string) => void;
   onRefresh: () => void;
@@ -20,6 +20,7 @@ export default function ContextMenu({
   left,
   right,
   bottom,
+  hidden,
   onClick,
   onNodeClick,
   onRefresh,
@@ -27,25 +28,29 @@ export default function ContextMenu({
 }: ContextMenuProps) {
 
 
-    const editMessage = () => {
+    const editMessage = async () => {
+        if (hidden) {
+            await selectBranch();
+        }
         chrome.runtime.sendMessage({ action: 'editMessage', messageId: messageId });
     }
-    const respondToMessage = () => {
+    const respondToMessage = async () => {
+        if (hidden) {
+            await selectBranch();
+        }
         chrome.runtime.sendMessage({ action: 'respondToMessage', childrenIds: childrenIds });
     }
 
-    const selectBranch = () => {
+    const selectBranch = async () => {
         if (messageId) {
             const steps = onNodeClick(messageId);
-            chrome.runtime.sendMessage({ action: "executeSteps", steps: steps })
-            .then(() => {
+            try {
+                await chrome.runtime.sendMessage({ action: "executeSteps", steps: steps });
                 onRefresh();
-                // scroll to the target node after the steps are executed
-                chrome.runtime.sendMessage({ action: "goToTarget", targetId: messageId });
-            })
-            .catch((error) => {
+                await chrome.runtime.sendMessage({ action: "goToTarget", targetId: messageId });
+            } catch (error) {
                 console.error('Error executing steps:', error);
-            });
+            }
         }
     }
 

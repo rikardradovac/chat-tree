@@ -116,6 +116,7 @@ type MenuState = {
     left: number | boolean;
     right: number | boolean;
     bottom: number | boolean;
+    hidden?: boolean;
   } | null;
 
 
@@ -414,6 +415,7 @@ const ConversationTree = () => {
           right: event.clientX >= pane.width - 200 && pane.width - event.clientX,
           bottom:
             event.clientY >= pane.height - 200 && pane.height - event.clientY + 48,
+          hidden: node.data?.hidden
         });
       } 
     },
