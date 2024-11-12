@@ -92,6 +92,10 @@ chrome.runtime.onMessage.addListener(
       goToTarget(request.targetId);
       sendResponse({ success: true });
       return true;
+    } else if (request.action === "log") {
+      console.log(request.message);
+      sendResponse({ success: true });
+      return true;
     }
     return true;
   }
@@ -246,43 +250,68 @@ async function respondToMessage(childrenIds: string[]) {
 }
 
 async function selectBranch(stepsToTake: any[]) {
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  const currentTab = tabs[0];
+  try {
+    if (!Array.isArray(stepsToTake)) {
+      throw new Error('stepsToTake must be an array');
+    }
 
-  await chrome.scripting.executeScript({
-    target: { tabId: currentTab.id ?? 0 },
-    func: (stepsToTake) => {
-      const waitForDomChange = (element: Element): Promise<void> => {
-        return new Promise((resolve, reject) => {
-          const maxWaitTime = 5000; // 5 seconds maximum wait
-          const timeout = setTimeout(() => {
-            observer.disconnect();
-            reject(new Error('Timeout waiting for DOM changes'));
-          }, maxWaitTime);
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tabs || tabs.length === 0) {
+      throw new Error('No active tab found');
+    }
+    const currentTab = tabs[0];
+    if (!currentTab.id) {
+      throw new Error('Current tab has no ID');
+    }
 
-          const observer = new MutationObserver((_mutations, obs) => {
-            clearTimeout(timeout);
-            obs.disconnect();
-            resolve();
+    await chrome.scripting.executeScript({
+      target: { tabId: currentTab.id },
+      func: (stepsToTake) => {
+        const waitForDomChange = (element: Element): Promise<void> => {
+          return new Promise((resolve, reject) => {
+            const maxWaitTime = 5000; // 5 seconds maximum wait
+            const timeout = setTimeout(() => {
+              observer.disconnect();
+              reject(new Error('Timeout waiting for DOM changes'));
+            }, maxWaitTime);
+
+            const observer = new MutationObserver((_mutations, obs) => {
+              clearTimeout(timeout);
+              obs.disconnect();
+              resolve();
+            });
+
+            observer.observe(element, {
+              childList: true,
+              subtree: true,
+              attributes: true,
+              characterData: true
+            });
           });
+        };
 
-          observer.observe(element, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            characterData: true
-          });
-        });
-      };
+        // Process steps sequentially using async/await
+        const processSteps = async () => {
+          try {
+            for (const step of stepsToTake) {
+              if (!step.nodeId) {
+                throw new Error('Step missing nodeId');
+              }
 
-      // Process steps sequentially using async/await
-      const processSteps = async () => {
-        for (const step of stepsToTake) {
-          const element = document.querySelector(`[data-message-id="${step.nodeId}"]`);
-          if (element) {
-            const buttonDiv = element.parentElement?.parentElement;
-            if (buttonDiv) {
+              const element = document.querySelector(`[data-message-id="${step.nodeId}"]`);
+              if (!element) {
+                throw new Error(`Element not found for nodeId: ${step.nodeId}`);
+              }
+
+              const buttonDiv = element.parentElement?.parentElement;
+              if (!buttonDiv) {
+                throw new Error(`Button container not found for nodeId: ${step.nodeId}`);
+              }
+
               const buttons = buttonDiv.querySelectorAll("button");
+              if (!buttons || buttons.length < 3) {
+                throw new Error(`Required buttons not found for nodeId: ${step.nodeId}`);
+              }
 
               // 0 is edit, 1 is left and 2 is right
               const buttonIndex = step.stepsRight > 0 ? 2 : 1;
@@ -292,16 +321,29 @@ async function selectBranch(stepsToTake: any[]) {
                 await waitForDomChange(buttonDiv);
               } catch (error) {
                 console.error('Error waiting for DOM change:', error);
+                throw error;
               }
             }
+          } catch (error) {
+            console.error('Error processing steps:', error);
+            throw error;
           }
-        }
-      };
+        };
 
-      processSteps();
-    },
-    args: [stepsToTake]
-  });
+        processSteps().catch(error => {
+          console.error('Failed to process steps:', error);
+        });
+      },
+      args: [stepsToTake]
+    }).catch(error => {
+      console.error('Script execution failed:', error);
+      throw error;
+    });
+
+  } catch (error) {
+    console.error('selectBranch failed:', error);
+    throw error;
+  }
 }
 
 async function goToTarget(targetId: string) {
