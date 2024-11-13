@@ -185,7 +185,12 @@ async function editMessage(messageId: string) {
           // Wait a brief moment before clicking the edit button
           setTimeout(() => {
             const buttons = buttonDiv.querySelectorAll("button");
-            buttons[0].click(); // the edit message button
+            const buttonIndex = Array.from(buttons).findIndex(button => button.getAttribute('aria-label') === "Edit message");
+            if (buttonIndex !== -1) {
+              buttons[buttonIndex].click();
+            } else {
+              throw new Error(`Button with required aria-label not found`);
+            }
             
             // Add another scroll after a slight delay to maintain position
             setTimeout(() => {
@@ -225,7 +230,12 @@ async function respondToMessage(childrenIds: string[]) {
           // Wait a brief moment before clicking the edit button
           setTimeout(() => {
             const buttons = buttonDiv.querySelectorAll("button");
-            buttons[0].click(); // the edit message button
+            const buttonIndex = Array.from(buttons).findIndex(button => button.getAttribute('aria-label') === "Edit message");
+            if (buttonIndex !== -1) {
+              buttons[buttonIndex].click();
+            } else {
+              throw new Error(`Button with required aria-label not found`);
+            }
             
             // Add another scroll after a slight delay to maintain position
             setTimeout(() => {
@@ -320,8 +330,17 @@ async function selectBranch(stepsToTake: any[]) {
                 throw new Error(`Required buttons not found for nodeId: ${step.nodeId}`);
               }
 
-              // 0 is edit, 1 is left and 2 is right
-              const buttonIndex = step.stepsRight > 0 ? 2 : 1;
+              // Find the button with the correct aria-label based on direction
+              const buttonIndex = Array.from(buttons).findIndex(button => {
+                const ariaLabel = button.getAttribute('aria-label');
+                return step.stepsLeft > 0 ? 
+                  ariaLabel === "Previous response" :
+                  ariaLabel === "Next response";
+              });
+
+              if (buttonIndex === -1) {
+                throw new Error(`Button with required aria-label not found for nodeId: ${step.nodeId}`);
+              }
               buttons[buttonIndex].click();
               
               try {

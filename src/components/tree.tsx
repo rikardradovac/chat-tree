@@ -131,7 +131,7 @@ const nodeHeight = 120;
 const CustomNode = ({ data }: { data: any }) => {   
   return (
     <div className={`px-4 py-2 shadow-lg rounded-lg border ${
-      data.role === 'user' ? 'bg-blue-50 border-blue-200' : 'bg-purple-50 border-purple-200'
+      data.role === 'user' ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200'
     } ${data.hidden ? 'grayscale' : ''}`} style={{
       width: nodeWidth,
       height: nodeHeight,
@@ -142,7 +142,7 @@ const CustomNode = ({ data }: { data: any }) => {
       <Handle type="target" position={Position.Top} className="w-2 h-2" />
       <div className="flex items-center">
         <div className={`w-2 h-2 rounded-full mr-2 ${
-          data.role === 'user' ? 'bg-blue-400' : 'bg-purple-400'
+          data.role === 'user' ? 'bg-yellow-400' : 'bg-gray-400'
         }`} />
         <div className="text-xs font-semibold text-gray-500 uppercase">
           {data.role}
@@ -153,7 +153,7 @@ const CustomNode = ({ data }: { data: any }) => {
         height: '70px',
         overflowY: 'auto'
       }}>
-        {data.label.length > 100 ? `${data.label.substring(0, 10)}...` : data.label}
+        {data.label.length > 100 ? `${data.label.substring(0, 100)}...` : data.label}
       </div>
 
       {data.timestamp && (
@@ -252,84 +252,60 @@ const ConversationTree = () => {
 
     const createChildNodes = (node: Node) => {
       if (node.children.length === 0) return;
-
-      node.children.forEach((childId) => {
-        const child = mapping[childId];
-        
-        // Check if current child node is valid
-        if (child.message?.content?.parts?.[0] &&
-            child.message.author.role !== 'system' && 
-            child.message.author.role !== 'tool' &&
-            child.message.recipient === 'all') {
-
-          child.parent = node.id;
-          child.type = 'custom';
-          const role = child.message.author.role;
-          const content = child.message.content.parts[0];
-          child.data = {
-            label: content,
-            role: role,
-            timestamp: child.message.create_time ?? undefined,
-            id: child.id,
-            hidden: true // default to hidden
-          };
-          
-          newNodes.push(child);
-          newEdges.push({
-            id: `${node.id}-${child.id}`,
-            source: node.id,
-            target: child.id,
-            type: 'smoothstep',
-            animated: true,
-            style: { stroke: '#2196f3', strokeWidth: 2 }
-          });
-          
-          createChildNodes(child);
-        } else {
-          
-          child.children.forEach((grandChildId) => {
-            const grandChild = mapping[grandChildId];
-            const processDescendant = (descendant: Node) => {
-                // if the descendant is valid
-              if (descendant.message?.content?.parts?.[0] && 
-                  descendant.message.author.role !== 'system' && 
-                  descendant.message.author.role !== 'tool' &&
-                  descendant.message.recipient === 'all') {
-            
-                
-                descendant.parent = node.id;
-                descendant.type = 'custom';
-                const role = descendant.message.author.role;
-                const content = descendant.message.content.parts[0];
-                descendant.data = {
-                  label: content,
-                  role: role,
-                  timestamp: descendant.message.create_time ?? undefined,
-                  id: descendant.id,
-                  hidden: true // default to hidden
-                };
-                
-                newNodes.push(descendant);
-                newEdges.push({
-                  id: `${node.id}-${descendant.id}`,
-                  source: node.id,
-                  target: descendant.id,
-                  type: 'smoothstep',
-                  animated: true,
-                  style: { stroke: '#2196f3', strokeWidth: 2 }
-                });
-
-                  createChildNodes(descendant);
-                
-              } else {
-                descendant.children.forEach((descId) => {
-                  processDescendant(mapping[descId]);
-                });
-              }
-            };
-            processDescendant(grandChild);
-          });
+    
+      // Helper function to find the first valid descendant
+      const findFirstValidDescendant = (currentNode: Node): Node | null => {
+        // If current node is valid, return it
+        if (currentNode.message?.content?.parts?.[0] &&
+            currentNode.message.author.role !== 'system' && 
+            currentNode.message.author.role !== 'tool' &&
+            currentNode.message.recipient === 'all') {
+          return currentNode;
         }
+    
+        // Otherwise, check children recursively
+        for (const childId of currentNode.children) {
+          const validDescendant = findFirstValidDescendant(mapping[childId]);
+          if (validDescendant) return validDescendant;
+        }
+    
+        return null;
+      };
+    
+      // Process each child, potentially skipping invalid intermediates
+      const validChildren = node.children
+        .map(childId => findFirstValidDescendant(mapping[childId]))
+        .filter((child): child is Node => child !== null);
+    
+      // Update the node's children array to point directly to valid descendants
+      node.children = validChildren.map(child => child.id);
+    
+      // Process each valid child
+      validChildren.forEach(child => {
+        child.parent = node.id;
+        child.type = 'custom';
+        const role = child.message!.author.role;
+        const content = child.message!.content.parts![0];
+        child.data = {
+          label: content,
+          role: role,
+          timestamp: child.message!.create_time ?? undefined,
+          id: child.id,
+          hidden: true // default to hidden
+        };
+        
+        newNodes.push(child);
+        newEdges.push({
+          id: `${node.id}-${child.id}`,
+          source: node.id,
+          target: child.id,
+          type: 'smoothstep',
+          animated: true,
+          style: { stroke: '#000000', strokeWidth: 2 }
+        });
+    
+        // Recursively process the valid child's children
+        createChildNodes(child);
       });
     };
 
@@ -494,8 +470,8 @@ const ConversationTree = () => {
       stepsRight: number;
     }> = [];
 
-
     let currentNode: any = nodes.find((node: Node) => node.id === targetId);
+      
     if (!currentNode) return [];
     // search for the parent of the target node until we find a visible node
     while (currentNode?.data?.hidden) {
@@ -506,7 +482,7 @@ const ConversationTree = () => {
       const activeChildIndex = parent.children.findIndex(
         (childId: any) => (nodes as any).find((node: any) => node.id === childId)?.data?.hidden === false
       );
-
+    
       // if the parent has more than one child, we need to find the index of the first visible child
       if (parent.children.length > 1) {
         // the case when the selected node is far down in hidden branch
@@ -536,6 +512,7 @@ const ConversationTree = () => {
     }
 
     stepsToTake.reverse();
+  
     return stepsToTake;
   }, [nodes]);
 
