@@ -71,13 +71,6 @@ npm run build
 
 Contributions are welcome! Feel free to submit issues and pull requests.
 
-## License 📄
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-If you find this tool useful, please star the repository! ⭐
 
 ## 🔐 Security & Privacy
 
@@ -96,3 +89,11 @@ This extension requires the `webRequest` permission to:
 - No data is sent to external servers
 
 All data processing happens locally in your browser. No data is sent to external servers.
+
+## License 📄
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+If you find this tool useful, please star the repository! ⭐
