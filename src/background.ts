@@ -46,55 +46,66 @@ function captureHeaders() {
 // Add message listener to handle requests for headers and conversation history
 chrome.runtime.onMessage.addListener(
   (request, _sender, sendResponse) => {
-    if (request.action === "getHeaders") {
-      loadRequestHeaders().then(headers => {
-        sendResponse({ headers });
-      });
-      return true;
-    } 
-    else if (request.action === "fetchConversationHistory") {
-      fetchConversationHistory()
-        .then(data => {
-          sendResponse({ success: true, data });
-        })
-        .catch(error => {
-          sendResponse({ success: false, error: error.message });
+    switch (request.action) {
+      case "getHeaders":
+        loadRequestHeaders().then(headers => {
+          sendResponse({ headers });
         });
-      return true;
-    }
-    else if (request.action === "checkNodes") {
-      checkNodesExistence(request.nodeIds)
-        .then(existingNodes => {
-          sendResponse({ success: true, existingNodes });
-        })
-        .catch(error => {
-          sendResponse({ success: false, error: error.message });
+        return true;
+
+      case "fetchConversationHistory":
+        fetchConversationHistory()
+          .then(data => {
+            sendResponse({ success: true, data });
+          })
+          .catch(error => {
+            sendResponse({ success: false, error: error.message });
+          });
+        return true;
+
+      case "checkNodes":
+        checkNodesExistence(request.nodeIds)
+          .then(existingNodes => {
+            sendResponse({ success: true, existingNodes });
+          })
+          .catch(error => {
+            sendResponse({ success: false, error: error.message });
+          });
+        return true;
+
+      case "editMessage":
+        editMessage(request.messageId);
+        sendResponse({ success: true });
+        return true;
+
+      case "respondToMessage":
+        respondToMessage(request.childrenIds);
+        sendResponse({ success: true });
+        return true;
+
+      case "executeSteps":
+        selectBranch(request.steps);
+        sendResponse({ success: true });
+        return true;
+
+      case "goToTarget":
+        goToTarget(request.targetId);
+        sendResponse({ success: true });
+        return true;
+
+      case "log":
+        console.log(request.message);
+        sendResponse({ success: true });
+        return true;
+      case "waitForStreamComplete":
+        waitForStreamComplete().then(() => {
+          sendResponse({ success: true });
         });
-      return true; // Important for async response
+        return true;
+
+      default:
+        return true;
     }
-    else if (request.action === "editMessage") {
-      editMessage(request.messageId);
-      sendResponse({ success: true });
-      return true;
-    }
-    else if (request.action === "respondToMessage") {
-      respondToMessage(request.childrenIds);
-      sendResponse({ success: true });
-      return true;
-    } else if (request.action === "executeSteps") {
-      selectBranch(request.steps);
-      sendResponse({ success: true });
-      return true;
-    } else if (request.action === "goToTarget") {
-      goToTarget(request.targetId);
-      sendResponse({ success: true });
-      return true;
-    } else if (request.action === "log") {
-      console.log(request.message);
-      sendResponse({ success: true });
-      return true;
-    }
-    return true;
   }
 );
 
@@ -389,20 +400,57 @@ async function goToTarget(targetId: string) {
   })
 }
 
+async function waitForStreamComplete() {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const currentTab = tabs[0];
+  
+  await chrome.scripting.executeScript({
+    target: { tabId: currentTab.id ?? 0 },
+    func: () => {
+      return new Promise<void>((resolve, reject) => {
+        let chatContainer: Element | null | undefined = null;
+
+        // Wait briefly for the streaming element to be added
+        setTimeout(() => {
+          chatContainer = document.querySelector('[class*="result-streaming"]')?.parentElement;
+          if (!chatContainer) {
+            console.log("No chat container found");
+            resolve();
+            return;
+          }
+        }, 100); // 100ms delay
+
+        const maxWaitTime = 5000;
+        const timeout = setTimeout(() => {
+          observer.disconnect();
+          reject(new Error('Timeout waiting for stream to complete'));
+        }, maxWaitTime);
+
+        const observer = new MutationObserver((_mutations) => {
+          // Check if any element in the container has result-streaming
+          const hasStreamingElement = chatContainer?.querySelector('[class*="result-streaming"]') !== null;
+          console.log("Has streaming element:", hasStreamingElement);
+          
+          if (!hasStreamingElement) {
+            console.log('Stream completed - no more streaming elements');
+            clearTimeout(timeout);
+            observer.disconnect();
+            resolve();
+          }
+        });
+
+        observer.observe(chatContainer!, {
+          subtree: true,      // Watch all descendants
+          attributes: true,   // Watch for attribute changes
+          attributeFilter: ['class']  // Only watch class changes
+        });
+      });
+    }
+  });
+}
+
 captureHeaders();
 
-// Add this to the end of background.ts
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (
-    changeInfo.status === 'complete' &&
-    tab.url?.includes('chat.openai.com')
-  ) {
-    // Open side panel when on chat.openai.com
-    chrome.sidePanel.open({ tabId });
-  }
-});
-
-// Optional: Set which URLs the side panel can appear on
 chrome.sidePanel.setOptions({
   path: 'index.html',
   enabled: true
