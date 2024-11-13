@@ -154,7 +154,6 @@ const CustomNode = ({ data }: { data: any }) => {
         overflowY: 'auto'
       }}>
         {data.label.length > 100 ? `${data.label.substring(0, 10)}...` : data.label}
-        {data.id}
       </div>
 
       {data.timestamp && (
@@ -182,6 +181,7 @@ const ConversationTree = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [menu, setMenu] = useState<MenuState>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const reactFlowInstance = useRef<any>(null);
 
 
   const checkNodes = async (nodeIds: string[]) => {
@@ -389,27 +389,29 @@ const ConversationTree = () => {
     setEdges(newEdges as any);
   };
 
-  useEffect(() => {
-    const fetchData = async () => {
-        // fetch data using chrome extension api
-      try {
-        const response = await chrome.runtime.sendMessage({ action: "fetchConversationHistory" });
-        if (response.success) {
-          setConversationData(response.data);
-        } else {
-          console.error('Failed to fetch conversation data:', response.error);
-        }
-      } catch (error) {
-        console.error('Error fetching conversation data:', error);
-      } finally {
-        setIsLoading(false);
+  const handleRefresh = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await chrome.runtime.sendMessage({ action: "fetchConversationHistory" });
+      if (response.success) {
+        setConversationData(response.data);
+        // After the nodes are updated, fit the view
+        setTimeout(() => {
+          reactFlowInstance.current?.fitView();
+        }, 100);
+      } else {
+        console.error('Failed to fetch conversation data:', response.error);
       }
-    };
-    
-    fetchData();
-    
-
+    } catch (error) {
+      console.error('Error fetching conversation data:', error);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    handleRefresh();
+  }, [handleRefresh]);
 
   useEffect(() => {
     if (conversationData) {
@@ -561,6 +563,17 @@ const ConversationTree = () => {
  
   return (
     <div className="w-full h-full" style={{ height: '90vh', width: '100%' }}>
+      <div className="absolute top-4 right-4 z-10">
+        <button
+          onClick={handleRefresh}
+          className="bg-white p-2 rounded-full shadow-lg mt-8 hover:bg-gray-50 transition-colors"
+          title="Refresh conversation"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </button>
+      </div>
       <ReactFlow
         ref={ref}
         nodes={nodes}
@@ -571,6 +584,7 @@ const ConversationTree = () => {
         nodeTypes={nodeTypes}
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
+        onInit={instance => { reactFlowInstance.current = instance; }}
         fitView
         minZoom={0.1}
         maxZoom={1.5}
