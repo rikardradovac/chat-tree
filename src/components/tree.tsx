@@ -153,8 +153,10 @@ const CustomNode = ({ data }: { data: any }) => {
         height: '70px',
         overflowY: 'auto'
       }}>
-        {data.label.length > 100 ? `${data.label.substring(0, 100)}...` : data.label}
+        {data.label.length > 100 ? `${data.label.substring(0, 10)}...` : data.label}
+        {data.id}
       </div>
+
       {data.timestamp && (
         <div className="absolute bottom-2 left-4 text-xs text-gray-400">
           {new Date(parseFloat(data.timestamp) * 1000).toLocaleString()} 
@@ -337,7 +339,6 @@ const ConversationTree = () => {
 
     rootNode = findFirstContentParent(rootNode);
     if (!rootNode) return;
-    log(`this is rootNode ${JSON.stringify(rootNode)} in createNodesInOrder`);
     rootNode.type = 'custom';
     const role = rootNode.message!.author.role;
     const content = role !== 'system' ? rootNode.message!.content.parts![0] : 'Start of your conversation';
@@ -419,15 +420,15 @@ const ConversationTree = () => {
 
   
 
-  const log = (message: any) => {
-    // Log to background console
-    chrome.runtime.sendMessage({ 
-        action: 'log', 
-        message: message 
-    });
-    // Also log to regular console
-    console.log('[ChatTree]', message);
-  };
+  // const log = (message: any) => {
+  //   // Log to background console
+  //   chrome.runtime.sendMessage({ 
+  //       action: 'log', 
+  //       message: message 
+  //   });
+  //   // Also log to regular console
+  //   console.log('[ChatTree]', message);
+  // };
 
 
   const onNodeContextMenu = useCallback(
@@ -484,7 +485,7 @@ const ConversationTree = () => {
   const calculateSteps = useCallback((targetId: string) => {
     // create an array of steps for the background script to execute. This will be the order of clicks on
     // the different chat nodes to get to the target branch
-    // we will iterate from the clicked node and search up the tree until a visible node is found
+    // Traverse up the tree until we find a visible node and record the steps, return the reversed order
     const stepsToTake: Array<{
       nodeId: string;
       stepsLeft: number;
@@ -493,29 +494,24 @@ const ConversationTree = () => {
 
 
     let currentNode: any = nodes.find((node: Node) => node.id === targetId);
-    log(`this is nodes ${JSON.stringify(nodes)} in calculateSteps`);
     if (!currentNode) return [];
-    log(`this is currentNode ${JSON.stringify(currentNode)} in calculateSteps`);
     // search for the parent of the target node until we find a visible node
     while (currentNode?.data?.hidden) {
       const parent: any = nodes.find((n: Node) => n.id === currentNode?.parent);
       if (!parent) break;
-      log(`this is parent ${JSON.stringify(parent)} in calculateSteps`);
+
       const childIndex = parent.children.indexOf(currentNode.id);
       const activeChildIndex = parent.children.findIndex(
         (childId: any) => (nodes as any).find((node: any) => node.id === childId)?.data?.hidden === false
       );
-      log(`this is activeChildIndex ${activeChildIndex} in calculateSteps`);
 
       // if the parent has more than one child, we need to find the index of the first visible child
       if (parent.children.length > 1) {
-        log(`this is parent.children.length ${parent.children.length} in calculateSteps`);
-
         // the case when the selected node is far down in hidden branch
         if (activeChildIndex === -1) {
           for (let i = 0; i < childIndex; i++) {
             stepsToTake.push({
-              nodeId: parent.children[i],
+              nodeId: parent.children[0],
               stepsLeft: -1,
               stepsRight: 1,
             });
@@ -537,8 +533,6 @@ const ConversationTree = () => {
       currentNode = parent;
     }
 
-    
-    log(`this is stepsToTake ${JSON.stringify(stepsToTake)} in calculateSteps`);
     stepsToTake.reverse();
     return stepsToTake;
   }, [nodes]);

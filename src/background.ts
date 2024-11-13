@@ -289,6 +289,8 @@ async function selectBranch(stepsToTake: any[]) {
         };
 
         // Process steps sequentially using async/await
+        let prevId: string | null = null;
+        let buttonDiv: Element | null | undefined = null;
         const processSteps = async () => {
           try {
             for (const step of stepsToTake) {
@@ -296,12 +298,19 @@ async function selectBranch(stepsToTake: any[]) {
                 throw new Error('Step missing nodeId');
               }
 
-              const element = document.querySelector(`[data-message-id="${step.nodeId}"]`);
-              if (!element) {
-                throw new Error(`Element not found for nodeId: ${step.nodeId}`);
+              if (prevId !== step.nodeId) {
+                // if the node is different from the previous one, we need to find the new buttonDiv
+                const element = document.querySelector(`[data-message-id="${step.nodeId}"]`);
+                if (!element) {
+                  throw new Error(`Element not found for nodeId: ${step.nodeId}`);
+                }
+                
+                buttonDiv = element.parentElement?.parentElement;
+                if (!buttonDiv) {
+                  throw new Error(`Button container not found for nodeId: ${step.nodeId}`);
+                }
               }
 
-              const buttonDiv = element.parentElement?.parentElement;
               if (!buttonDiv) {
                 throw new Error(`Button container not found for nodeId: ${step.nodeId}`);
               }
@@ -316,6 +325,7 @@ async function selectBranch(stepsToTake: any[]) {
               buttons[buttonIndex].click();
               
               try {
+                prevId = step.nodeId;
                 await waitForDomChange(buttonDiv);
               } catch (error) {
                 console.error('Error waiting for DOM change:', error);
