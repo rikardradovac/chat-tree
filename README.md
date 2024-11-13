@@ -83,7 +83,7 @@ If you find this tool useful, please star the repository! ⭐
 
 This extension requires the following permissions to function:
 
-- **storage**: To save your visualization preferences
+- **storage**: To save headers in session in order to fetch the conversations
 - **tabs**: To access the current ChatGPT conversation
 - **webRequest**: To monitor ChatGPT API requests for conversation data
 - **scripting**: To inject the visualization interface
