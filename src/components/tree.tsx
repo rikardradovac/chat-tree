@@ -539,11 +539,11 @@ const ConversationTree = () => {
   }
  
   return (
-    <div className="w-full h-full" style={{ height: '90vh', width: '100%' }}>
+    <div className="w-full h-full" style={{ height: '100%', width: '100%' }}>
       <div className="absolute top-4 right-4 z-10">
         <button
           onClick={handleRefresh}
-          className="bg-white p-2 rounded-full shadow-lg mt-8 hover:bg-gray-50 transition-colors"
+          className="bg-white p-2 rounded-full shadow-lg mt-2 hover:bg-gray-50 transition-colors"
           title="Refresh conversation"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -569,7 +569,7 @@ const ConversationTree = () => {
       >
         <Controls className="bg-white rounded-lg shadow-lg" />
         <MiniMap 
-          nodeColor={(node) => node.data?.role === 'user' ? '#bbdefb' : '#e1bee7'}
+          nodeColor={(node) => node.data?.role === 'user' ? '#fefce8' : '#f9fafb'}
           className="bg-white rounded-lg shadow-lg"
         />
         <Background variant={BackgroundVariant.Dots} gap={12} size={1} color="#f1f1f1" />
