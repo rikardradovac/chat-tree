@@ -131,7 +131,7 @@ const nodeHeight = 120;
 const CustomNode = ({ data }: { data: any }) => {   
   return (
     <div className={`px-4 py-2 shadow-lg rounded-lg border ${
-      data.role === 'user' ? 'bg-blue-50 border-blue-200' : 'bg-purple-50 border-purple-200'
+      data.role === 'user' ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200'
     } ${data.hidden ? 'grayscale' : ''}`} style={{
       width: nodeWidth,
       height: nodeHeight,
@@ -142,7 +142,7 @@ const CustomNode = ({ data }: { data: any }) => {
       <Handle type="target" position={Position.Top} className="w-2 h-2" />
       <div className="flex items-center">
         <div className={`w-2 h-2 rounded-full mr-2 ${
-          data.role === 'user' ? 'bg-blue-400' : 'bg-purple-400'
+          data.role === 'user' ? 'bg-yellow-400' : 'bg-gray-400'
         }`} />
         <div className="text-xs font-semibold text-gray-500 uppercase">
           {data.role}
@@ -155,6 +155,7 @@ const CustomNode = ({ data }: { data: any }) => {
       }}>
         {data.label.length > 100 ? `${data.label.substring(0, 100)}...` : data.label}
       </div>
+
       {data.timestamp && (
         <div className="absolute bottom-2 left-4 text-xs text-gray-400">
           {new Date(parseFloat(data.timestamp) * 1000).toLocaleString()} 
@@ -180,6 +181,7 @@ const ConversationTree = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [menu, setMenu] = useState<MenuState>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const reactFlowInstance = useRef<any>(null);
 
 
   const checkNodes = async (nodeIds: string[]) => {
@@ -203,117 +205,116 @@ const ConversationTree = () => {
     const newEdges = new Array<Edge>();
 
     const findFirstContentParent = (node: Node): Node | null => {
-        // If no children, return null
-        if (node.children.length === 0) return null;
-
-        for (const childId of node.children) {
-            const child = mapping[childId];
+        // Use a queue to store nodes to process
+        const queue: Node[] = [...node.children.map(childId => mapping[childId])];
+        
+        while (queue.length > 0) {
+            const currentNode = queue.shift()!;
             
-            // If the child has content and is a user message, return it
-            if (child.message?.content?.parts?.[0] && child.message.author.role === "user") {
-                return child;
+            // If the current node has content and is a user message, we have found the first content parent
+            if (currentNode.message?.content?.parts?.[0] && 
+                currentNode.message.author.role === "user") {
+                let tempParent = mapping[currentNode.parent!];
+                
+                // For each child of the temp parent
+                tempParent.children.forEach((childId, index) => {
+                    let currentChild = mapping[childId];
+                    
+                    // Keep traversing down until we find a valid node
+                    while (currentChild && !(currentChild.message?.content?.parts?.[0] && 
+                           currentChild.message.author.role !== 'system' && 
+                           currentChild.message.author.role !== 'tool' &&
+                           currentChild.message.recipient === 'all')) {
+                        // If current child is invalid and has children, move to its first child
+                        if (currentChild.children.length > 0) {
+                            currentChild = mapping[currentChild.children[0]];
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    // If we found a valid child, update the temp parent's children array
+                    if (currentChild) {
+                        tempParent.children[index] = currentChild.id;
+                        currentChild.parent = tempParent.id;
+                    }
+                });
+                
+                return tempParent;
             }
-
-            // If the child has content, search for it in its children
-            const foundInChild = findFirstContentParent(child);
-            if (foundInChild && foundInChild.parent) {
-                // Return the parent of the child that has content so we can use it as the root
-                return mapping[foundInChild.parent];
-            }
+            
+            // Add children to the queue
+            queue.push(...currentNode.children.map(childId => mapping[childId]));
         }
         
         return null;
-    }
+    };
 
     const createChildNodes = (node: Node) => {
       if (node.children.length === 0) return;
-
-      node.children.forEach((childId) => {
-        const child = mapping[childId];
-        
-        // Check if current child node is valid
-        if (child.message?.content?.parts?.[0] &&
-            child.message.author.role !== 'system' && 
-            child.message.author.role !== 'tool' &&
-            child.message.recipient === 'all') {
-
-          child.parent = node.id;
-          child.type = 'custom';
-          const role = child.message.author.role;
-          const content = child.message.content.parts[0];
-          child.data = {
-            label: content,
-            role: role,
-            timestamp: child.message.create_time ?? undefined,
-            id: child.id,
-            hidden: true // default to hidden
-          };
-          
-          newNodes.push(child);
-          newEdges.push({
-            id: `${node.id}-${child.id}`,
-            source: node.id,
-            target: child.id,
-            type: 'smoothstep',
-            animated: true,
-            style: { stroke: '#2196f3', strokeWidth: 2 }
-          });
-          
-          createChildNodes(child);
-        } else {
-          
-          child.children.forEach((grandChildId) => {
-            const grandChild = mapping[grandChildId];
-            const processDescendant = (descendant: Node) => {
-                // if the descendant is valid
-              if (descendant.message?.content?.parts?.[0] && 
-                  descendant.message.author.role !== 'system' && 
-                  descendant.message.author.role !== 'tool' &&
-                  descendant.message.recipient === 'all') {
-            
-                
-                descendant.parent = node.id;
-                descendant.type = 'custom';
-                const role = descendant.message.author.role;
-                const content = descendant.message.content.parts[0];
-                descendant.data = {
-                  label: content,
-                  role: role,
-                  timestamp: descendant.message.create_time ?? undefined,
-                  id: descendant.id,
-                  hidden: true // default to hidden
-                };
-                
-                newNodes.push(descendant);
-                newEdges.push({
-                  id: `${node.id}-${descendant.id}`,
-                  source: node.id,
-                  target: descendant.id,
-                  type: 'smoothstep',
-                  animated: true,
-                  style: { stroke: '#2196f3', strokeWidth: 2 }
-                });
-
-                  createChildNodes(descendant);
-                
-              } else {
-                descendant.children.forEach((descId) => {
-                  processDescendant(mapping[descId]);
-                });
-              }
-            };
-            processDescendant(grandChild);
-          });
+    
+      // Helper function to find the first valid descendant
+      const findFirstValidDescendant = (currentNode: Node): Node | null => {
+        // If current node is valid, return it
+        if (currentNode.message?.content?.parts?.[0] &&
+            currentNode.message.author.role !== 'system' && 
+            currentNode.message.author.role !== 'tool' &&
+            currentNode.message.recipient === 'all') {
+          return currentNode;
         }
+    
+        // Otherwise, check children recursively
+        for (const childId of currentNode.children) {
+          const validDescendant = findFirstValidDescendant(mapping[childId]);
+          if (validDescendant) return validDescendant;
+        }
+    
+        return null;
+      };
+    
+      // Process each child, potentially skipping invalid intermediates
+      const validChildren = node.children
+        .map(childId => findFirstValidDescendant(mapping[childId]))
+        .filter((child): child is Node => child !== null);
+    
+      // Update the node's children array to point directly to valid descendants
+      node.children = validChildren.map(child => child.id);
+    
+      // Process each valid child
+      validChildren.forEach(child => {
+        child.parent = node.id;
+        child.type = 'custom';
+        const role = child.message!.author.role;
+        const content = child.message!.content.parts![0];
+        child.data = {
+          label: content,
+          role: role,
+          timestamp: child.message!.create_time ?? undefined,
+          id: child.id,
+          hidden: true // default to hidden
+        };
+        
+        newNodes.push(child);
+        newEdges.push({
+          id: `${node.id}-${child.id}`,
+          source: node.id,
+          target: child.id,
+          type: 'smoothstep',
+          animated: true,
+          style: { stroke: '#000000', strokeWidth: 2 }
+        });
+    
+        // Recursively process the valid child's children
+        createChildNodes(child);
       });
     };
 
     let rootNode = Object.values(mapping).find(node => !node.parent) as Node | null;
     if (!rootNode) return;
 
+
     rootNode = findFirstContentParent(rootNode);
     if (!rootNode) return;
-    
     rootNode.type = 'custom';
     const role = rootNode.message!.author.role;
     const content = role !== 'system' ? rootNode.message!.content.parts![0] : 'Start of your conversation';
@@ -364,27 +365,29 @@ const ConversationTree = () => {
     setEdges(newEdges as any);
   };
 
-  useEffect(() => {
-    const fetchData = async () => {
-        // fetch data using chrome extension api
-      try {
-        const response = await chrome.runtime.sendMessage({ action: "fetchConversationHistory" });
-        if (response.success) {
-          setConversationData(response.data);
-        } else {
-          console.error('Failed to fetch conversation data:', response.error);
-        }
-      } catch (error) {
-        console.error('Error fetching conversation data:', error);
-      } finally {
-        setIsLoading(false);
+  const handleRefresh = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await chrome.runtime.sendMessage({ action: "fetchConversationHistory" });
+      if (response.success) {
+        setConversationData(response.data);
+        // After the nodes are updated, fit the view
+        setTimeout(() => {
+          reactFlowInstance.current?.fitView();
+        }, 100);
+      } else {
+        console.error('Failed to fetch conversation data:', response.error);
       }
-    };
-    
-    fetchData();
-    
-
+    } catch (error) {
+      console.error('Error fetching conversation data:', error);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    handleRefresh();
+  }, [handleRefresh]);
 
   useEffect(() => {
     if (conversationData) {
@@ -394,6 +397,16 @@ const ConversationTree = () => {
   }, [conversationData]);
 
   
+
+  // const log = (message: any) => {
+  //   // Log to background console
+  //   chrome.runtime.sendMessage({ 
+  //       action: 'log', 
+  //       message: message 
+  //   });
+  //   // Also log to regular console
+  //   console.log('[ChatTree]', message);
+  // };
 
 
   const onNodeContextMenu = useCallback(
@@ -450,17 +463,16 @@ const ConversationTree = () => {
   const calculateSteps = useCallback((targetId: string) => {
     // create an array of steps for the background script to execute. This will be the order of clicks on
     // the different chat nodes to get to the target branch
-    // we will iterate from the clicked node and search up the tree until a visible node is found
+    // Traverse up the tree until we find a visible node and record the steps, return the reversed order
     const stepsToTake: Array<{
       nodeId: string;
       stepsLeft: number;
       stepsRight: number;
     }> = [];
 
-
     let currentNode: any = nodes.find((node: Node) => node.id === targetId);
+      
     if (!currentNode) return [];
-
     // search for the parent of the target node until we find a visible node
     while (currentNode?.data?.hidden) {
       const parent: any = nodes.find((n: Node) => n.id === currentNode?.parent);
@@ -470,15 +482,14 @@ const ConversationTree = () => {
       const activeChildIndex = parent.children.findIndex(
         (childId: any) => (nodes as any).find((node: any) => node.id === childId)?.data?.hidden === false
       );
-
+    
       // if the parent has more than one child, we need to find the index of the first visible child
       if (parent.children.length > 1) {
-
         // the case when the selected node is far down in hidden branch
         if (activeChildIndex === -1) {
           for (let i = 0; i < childIndex; i++) {
             stepsToTake.push({
-              nodeId: parent.children[i],
+              nodeId: parent.children[0],
               stepsLeft: -1,
               stepsRight: 1,
             });
@@ -500,17 +511,15 @@ const ConversationTree = () => {
       currentNode = parent;
     }
 
-    return stepsToTake.reverse();
+    stepsToTake.reverse();
+  
+    return stepsToTake;
   }, [nodes]);
 
   const handleNodeClick = useCallback((messageId: string) => {
-    const steps = calculateSteps(messageId);
-    // send the steps to the background script which will execute
-    chrome.runtime.sendMessage({
-      action: "executeSteps",
-      steps: steps
-    });
     setMenu(null); // Close the context menu after clicking
+    return calculateSteps(messageId);
+
   }, [calculateSteps]);
 
   if (isLoading) {
@@ -531,6 +540,17 @@ const ConversationTree = () => {
  
   return (
     <div className="w-full h-full" style={{ height: '90vh', width: '100%' }}>
+      <div className="absolute top-4 right-4 z-10">
+        <button
+          onClick={handleRefresh}
+          className="bg-white p-2 rounded-full shadow-lg mt-8 hover:bg-gray-50 transition-colors"
+          title="Refresh conversation"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </button>
+      </div>
       <ReactFlow
         ref={ref}
         nodes={nodes}
@@ -541,6 +561,7 @@ const ConversationTree = () => {
         nodeTypes={nodeTypes}
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
+        onInit={instance => { reactFlowInstance.current = instance; }}
         fitView
         minZoom={0.1}
         maxZoom={1.5}

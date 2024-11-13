@@ -8,7 +8,7 @@ interface ContextMenuProps {
   bottom: number | boolean;
   hidden?: boolean;
   onClick?: () => void;
-  onNodeClick: (messageId: string) => void;
+  onNodeClick: (messageId: string) => any[];
   onRefresh: () => void;
 }
 
@@ -44,6 +44,7 @@ export default function ContextMenu({
     const selectBranch = async () => {
         if (messageId) {
             const steps = onNodeClick(messageId);
+            if (!steps) return;
             try {
                 await chrome.runtime.sendMessage({ action: "executeSteps", steps: steps });
                 onRefresh();

@@ -8,13 +8,8 @@
         "48": "logo48.png",
         "128": "logo128.png"
     },
-    "action": {
-        "default_popup": "index.html",
-        "default_icon": {
-            "16": "logo16.png",
-            "48": "logo48.png",
-            "128": "logo128.png"
-        }
+    "side_panel": {
+        "default_path": "index.html"
     },
     "background": {
         "service_worker": "background.js",
@@ -25,9 +20,17 @@
         "tabs",
         "webRequest",
         "scripting",
-        "activeTab"
+        "activeTab",
+        "sidePanel"
     ],
     "host_permissions": [
         "https://chatgpt.com/backend-api/*"
-    ]
+    ],
+    "content_security_policy": {
+        "extension_pages": "script-src 'self'; object-src 'self';"
+    },
+    "web_accessible_resources": [{
+        "resources": ["logo16.png", "logo48.png", "logo128.png"],
+        "matches": ["https://chat.openai.com/*"]
+    }]
 }

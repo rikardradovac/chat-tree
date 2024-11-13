@@ -1,8 +1,6 @@
-let storedRequestHeaders: chrome.webRequest.HttpHeader[] | null = null;
-
 // Function to save headers to chrome.storage
 function saveRequestHeaders(headers: chrome.webRequest.HttpHeader[]) {
-  chrome.storage.local.set({ storedRequestHeaders: headers }, () => {
+  chrome.storage.session.set({ storedRequestHeaders: headers }, () => {
     if (chrome.runtime.lastError) {
       console.error('Error saving headers:', chrome.runtime.lastError);
     }
@@ -12,7 +10,7 @@ function saveRequestHeaders(headers: chrome.webRequest.HttpHeader[]) {
 // Function to load headers from chrome.storage
 function loadRequestHeaders(): Promise<chrome.webRequest.HttpHeader[] | null> {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['storedRequestHeaders'], (result) => {
+    chrome.storage.session.get(['storedRequestHeaders'], (result) => {
       if (chrome.runtime.lastError) {
         console.error('Error loading headers:', chrome.runtime.lastError);
         resolve(null);
@@ -45,15 +43,14 @@ function captureHeaders() {
   );
 }
 
-function getRequestHeaders(): chrome.webRequest.HttpHeader[] | null {
-  return storedRequestHeaders;
-}
-
 // Add message listener to handle requests for headers and conversation history
 chrome.runtime.onMessage.addListener(
   (request, _sender, sendResponse) => {
     if (request.action === "getHeaders") {
-      sendResponse({ headers: storedRequestHeaders });
+      loadRequestHeaders().then(headers => {
+        sendResponse({ headers });
+      });
+      return true;
     } 
     else if (request.action === "fetchConversationHistory") {
       fetchConversationHistory()
@@ -92,6 +89,10 @@ chrome.runtime.onMessage.addListener(
       goToTarget(request.targetId);
       sendResponse({ success: true });
       return true;
+    } else if (request.action === "log") {
+      console.log(request.message);
+      sendResponse({ success: true });
+      return true;
     }
     return true;
   }
@@ -99,15 +100,16 @@ chrome.runtime.onMessage.addListener(
 
 // fetch the conversation history
 async function fetchConversationHistory() {
+  let headers = null;
   for (let i = 0; i < 3; i++) {
-    storedRequestHeaders = await loadRequestHeaders();
-    if (storedRequestHeaders?.some(h => h.name.toLowerCase() === 'authorization')) {
+    headers = await loadRequestHeaders();
+    if (headers?.some(h => h.name.toLowerCase() === 'authorization')) {
       break;
     }
-    await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms before retry
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
 
-  if (!storedRequestHeaders?.some(h => h.name.toLowerCase() === 'authorization')) {
+  if (!headers?.some(h => h.name.toLowerCase() === 'authorization')) {
     console.error('No authorization header available');
     throw new Error('Authorization header not found');
   }
@@ -125,14 +127,14 @@ async function fetchConversationHistory() {
     const url = new URL(currentTab.url);
     const conversationId = url.pathname.split('/').pop();
 
-    const headers = new Headers();
-    storedRequestHeaders.forEach(header => {
-      headers.append(header.name, header.value || '');
+    const headersList = new Headers();
+    headers.forEach(header => {
+      headersList.append(header.name, header.value || '');
     });
 
     const response = await fetch(`https://chatgpt.com/backend-api/conversation/${conversationId}`, {
       method: 'GET',
-      headers,
+      headers: headersList,
     });
     
     const data = await response.json();
@@ -183,7 +185,12 @@ async function editMessage(messageId: string) {
           // Wait a brief moment before clicking the edit button
           setTimeout(() => {
             const buttons = buttonDiv.querySelectorAll("button");
-            buttons[0].click(); // the edit message button
+            const buttonIndex = Array.from(buttons).findIndex(button => button.getAttribute('aria-label') === "Edit message");
+            if (buttonIndex !== -1) {
+              buttons[buttonIndex].click();
+            } else {
+              throw new Error(`Button with required aria-label not found`);
+            }
             
             // Add another scroll after a slight delay to maintain position
             setTimeout(() => {
@@ -223,7 +230,12 @@ async function respondToMessage(childrenIds: string[]) {
           // Wait a brief moment before clicking the edit button
           setTimeout(() => {
             const buttons = buttonDiv.querySelectorAll("button");
-            buttons[0].click(); // the edit message button
+            const buttonIndex = Array.from(buttons).findIndex(button => button.getAttribute('aria-label') === "Edit message");
+            if (buttonIndex !== -1) {
+              buttons[buttonIndex].click();
+            } else {
+              throw new Error(`Button with required aria-label not found`);
+            }
             
             // Add another scroll after a slight delay to maintain position
             setTimeout(() => {
@@ -246,62 +258,119 @@ async function respondToMessage(childrenIds: string[]) {
 }
 
 async function selectBranch(stepsToTake: any[]) {
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  const currentTab = tabs[0];
+  try {
+    if (!Array.isArray(stepsToTake)) {
+      throw new Error('stepsToTake must be an array');
+    }
 
-  await chrome.scripting.executeScript({
-    target: { tabId: currentTab.id ?? 0 },
-    func: (stepsToTake) => {
-      const waitForDomChange = (element: Element): Promise<void> => {
-        return new Promise((resolve, reject) => {
-          const maxWaitTime = 5000; // 5 seconds maximum wait
-          const timeout = setTimeout(() => {
-            observer.disconnect();
-            reject(new Error('Timeout waiting for DOM changes'));
-          }, maxWaitTime);
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tabs || tabs.length === 0) {
+      throw new Error('No active tab found');
+    }
+    const currentTab = tabs[0];
+    if (!currentTab.id) {
+      throw new Error('Current tab has no ID');
+    }
 
-          const observer = new MutationObserver((_mutations, obs) => {
-            clearTimeout(timeout);
-            obs.disconnect();
-            resolve();
+    await chrome.scripting.executeScript({
+      target: { tabId: currentTab.id },
+      func: (stepsToTake) => {
+        const waitForDomChange = (element: Element): Promise<void> => {
+          return new Promise((resolve, reject) => {
+            const maxWaitTime = 5000; // 5 seconds maximum wait
+            const timeout = setTimeout(() => {
+              observer.disconnect();
+              reject(new Error('Timeout waiting for DOM changes'));
+            }, maxWaitTime);
+
+            const observer = new MutationObserver((_mutations, obs) => {
+              clearTimeout(timeout);
+              obs.disconnect();
+              resolve();
+            });
+
+            observer.observe(element, {
+              childList: true,
+              subtree: true,
+              attributes: true,
+              characterData: true
+            });
           });
+        };
 
-          observer.observe(element, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            characterData: true
-          });
-        });
-      };
+        // Process steps sequentially using async/await
+        let prevId: string | null = null;
+        let buttonDiv: Element | null | undefined = null;
+        const processSteps = async () => {
+          try {
+            for (const step of stepsToTake) {
+              if (!step.nodeId) {
+                throw new Error('Step missing nodeId');
+              }
 
-      // Process steps sequentially using async/await
-      const processSteps = async () => {
-        for (const step of stepsToTake) {
-          const element = document.querySelector(`[data-message-id="${step.nodeId}"]`);
-          if (element) {
-            const buttonDiv = element.parentElement?.parentElement;
-            if (buttonDiv) {
+              if (prevId !== step.nodeId) {
+                // if the node is different from the previous one, we need to find the new buttonDiv
+                const element = document.querySelector(`[data-message-id="${step.nodeId}"]`);
+                if (!element) {
+                  throw new Error(`Element not found for nodeId: ${step.nodeId}`);
+                }
+                
+                buttonDiv = element.parentElement?.parentElement;
+                if (!buttonDiv) {
+                  throw new Error(`Button container not found for nodeId: ${step.nodeId}`);
+                }
+              }
+
+              if (!buttonDiv) {
+                throw new Error(`Button container not found for nodeId: ${step.nodeId}`);
+              }
+
               const buttons = buttonDiv.querySelectorAll("button");
+              if (!buttons || buttons.length < 3) {
+                throw new Error(`Required buttons not found for nodeId: ${step.nodeId}`);
+              }
 
-              // 0 is edit, 1 is left and 2 is right
-              const buttonIndex = step.stepsRight > 0 ? 2 : 1;
+              // Find the button with the correct aria-label based on direction
+              const buttonIndex = Array.from(buttons).findIndex(button => {
+                const ariaLabel = button.getAttribute('aria-label');
+                return step.stepsLeft > 0 ? 
+                  ariaLabel === "Previous response" :
+                  ariaLabel === "Next response";
+              });
+
+              if (buttonIndex === -1) {
+                throw new Error(`Button with required aria-label not found for nodeId: ${step.nodeId}`);
+              }
               buttons[buttonIndex].click();
               
               try {
+                prevId = step.nodeId;
                 await waitForDomChange(buttonDiv);
               } catch (error) {
                 console.error('Error waiting for DOM change:', error);
+                throw error;
               }
             }
+          } catch (error) {
+            console.error('Error processing steps:', error);
+            throw error;
           }
-        }
-      };
+        };
 
-      processSteps();
-    },
-    args: [stepsToTake]
-  });
+        processSteps().catch(error => {
+          console.error('Failed to process steps:', error);
+        });
+      },
+      args: [stepsToTake]
+    }).catch(error => {
+      console.error('Script execution failed:', error);
+      throw error;
+    });
+
+  } catch (error) {
+    console.error('selectBranch failed:', error);
+    throw error;
+  }
 }
 
 async function goToTarget(targetId: string) {
@@ -321,3 +390,20 @@ async function goToTarget(targetId: string) {
 }
 
 captureHeaders();
+
+// Add this to the end of background.ts
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (
+    changeInfo.status === 'complete' &&
+    tab.url?.includes('chat.openai.com')
+  ) {
+    // Open side panel when on chat.openai.com
+    chrome.sidePanel.open({ tabId });
+  }
+});
+
+// Optional: Set which URLs the side panel can appear on
+chrome.sidePanel.setOptions({
+  path: 'index.html',
+  enabled: true
+});
