@@ -391,19 +391,47 @@ async function goToTarget(targetId: string) {
 
 captureHeaders();
 
-// Add this to the end of background.ts
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (
-    changeInfo.status === 'complete' &&
-    tab.url?.includes('chat.openai.com')
-  ) {
-    // Open side panel when on chat.openai.com
-    chrome.sidePanel.open({ tabId });
+const CHATGPT_ORIGIN = 'https://chatgpt.com';
+
+chrome.tabs.onUpdated.addListener(async (tabId, _info, tab) => {
+  try {
+    if (!tab.url) {
+      console.log('No URL found for tab:', tabId);
+      return;
+    }
+    const url = new URL(tab.url);
+    if (url.origin === CHATGPT_ORIGIN) {
+      await chrome.sidePanel.setOptions({
+        tabId,
+        path: 'index.html',
+        enabled: true
+      });
+    } else {
+      await chrome.sidePanel.setOptions({
+        tabId,
+        enabled: false
+      });
+    }
+  } catch (error) {
+    console.error('Error in onUpdated listener:', error);
   }
 });
 
-// Optional: Set which URLs the side panel can appear on
-chrome.sidePanel.setOptions({
-  path: 'index.html',
-  enabled: true
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  const tab = await chrome.tabs.get(activeInfo.tabId);
+  if (!tab.url) return;
+  const url = new URL(tab.url);
+  
+  if (url.origin === CHATGPT_ORIGIN) {
+    await chrome.sidePanel.setOptions({
+      tabId: activeInfo.tabId,
+      path: 'index.html',
+      enabled: true
+    });
+  } else {
+    await chrome.sidePanel.setOptions({
+      tabId: activeInfo.tabId,
+      enabled: false
+    });
+  }
 });
