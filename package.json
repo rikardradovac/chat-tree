@@ -16,7 +16,9 @@
     "@dagrejs/dagre": "^1.1.4",
     "@xyflow/react": "^12.3.2",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-markdown": "^9.0.1",
+    "remark-gfm": "^4.0.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.279",

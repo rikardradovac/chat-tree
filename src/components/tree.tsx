@@ -13,6 +13,8 @@ import {
   Position,
   NodeTypes,
 } from '@xyflow/react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import ContextMenu from './context-menu';
 import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
@@ -25,9 +27,9 @@ interface Author {
 
 interface Content {
     content_type: string;
-    model_set_context?: string | null; // Make this optional
-    repository?: string | null;         // Make this optional
-    repo_summary?: string | null;       // Make this optional
+    model_set_context?: string | null; 
+    repository?: string | null;        
+    repo_summary?: string | null;       
     parts?: string[] | null;
 }
 
@@ -127,42 +129,84 @@ const nodeWidth = 300;
 const nodeHeight = 120;
 
 
+  // const log = (message: any) => {
+  //   // Log to background console
+  //   chrome.runtime.sendMessage({ 
+  //       action: 'log', 
+  //       message: message 
+  //   });
+  //   // Also log to regular console
+  //   console.log('[ChatTree]', message);
+  // };
 
 const CustomNode = ({ data }: { data: any }) => {   
+  const [isExpanded, setIsExpanded] = useState(false);
+
   return (
-    <div className={`px-4 py-2 shadow-lg rounded-lg border ${
-      data.role === 'user' ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200'
-    } ${data.hidden ? 'grayscale' : ''}`} style={{
-      width: nodeWidth,
-      height: nodeHeight,
-      position: 'relative',
-      opacity: data.hidden ? 0.4 : 1,
-      background: data.hidden ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px)' : undefined
-    }}>
-      <Handle type="target" position={Position.Top} className="w-2 h-2" />
-      <div className="flex items-center">
-        <div className={`w-2 h-2 rounded-full mr-2 ${
-          data.role === 'user' ? 'bg-yellow-400' : 'bg-gray-400'
-        }`} />
-        <div className="text-xs font-semibold text-gray-500 uppercase">
-          {data.role}
+    <>
+      <div 
+        className={`px-4 py-2 shadow-lg rounded-lg border transition-all duration-300 
+          ${data.role === 'user' ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200'}
+          ${data.hidden ? 'grayscale' : ''}
+          ${isExpanded ? 'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-[80vw] h-[80vh]' : ''}
+        `} 
+        style={{
+          width: isExpanded ? undefined : nodeWidth,
+          height: isExpanded ? undefined : nodeHeight,
+          position: isExpanded ? 'fixed' : 'relative',
+          opacity: data.hidden && !isExpanded ? 0.4 : 1,
+          background: data.hidden && !isExpanded ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px)' : undefined
+        }}
+        onDoubleClick={() => setIsExpanded(!isExpanded)}
+      >
+        {!isExpanded && <Handle type="target" position={Position.Top} className="w-2 h-2" />}
+        
+        <div className="flex items-center">
+          <div className={`w-2 h-2 rounded-full mr-2 ${
+            data.role === 'user' ? 'bg-yellow-400' : 'bg-gray-400'
+          }`} />
+          <div className="text-xs font-semibold text-gray-500 uppercase">
+            {data.role}
+          </div>
         </div>
-      </div>
-      <div className="mt-2 text-sm text-gray-700" style={{ 
-        wordBreak: 'break-word',
-        height: '70px',
-        overflowY: 'auto'
-      }}>
-        {data.label.length > 100 ? `${data.label.substring(0, 100)}...` : data.label}
+
+        <div className={`mt-2 text-sm text-gray-700 ${
+          isExpanded 
+            ? 'h-[calc(100%-100px)] overflow-y-auto nowheel' 
+            : 'line-clamp-3'
+          }`} 
+          style={{ 
+            wordBreak: 'break-word',
+          }}
+        >
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{data.label}</ReactMarkdown>
+        </div>
+
+        {data.timestamp && (
+          <div className="absolute bottom-2 left-4 text-xs text-gray-400">
+            {new Date(parseFloat(data.timestamp) * 1000).toLocaleString()} 
+          </div>
+        )}
+        
+        {!isExpanded && <Handle type="source" position={Position.Bottom} className="w-2 h-2" />}
+
+        {isExpanded && (
+          <button 
+            className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full"
+            onClick={() => setIsExpanded(false)}
+          >
+            ✕
+          </button>
+        )}
       </div>
 
-      {data.timestamp && (
-        <div className="absolute bottom-2 left-4 text-xs text-gray-400">
-          {new Date(parseFloat(data.timestamp) * 1000).toLocaleString()} 
-        </div>
+      {isExpanded && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 -z-10"
+          onClick={() => setIsExpanded(false)}
+        />
       )}
-      <Handle type="source" position={Position.Bottom} className="w-2 h-2" />
-    </div>
+    </>
   );
 };
 
@@ -398,15 +442,7 @@ const ConversationTree = () => {
 
   
 
-  // const log = (message: any) => {
-  //   // Log to background console
-  //   chrome.runtime.sendMessage({ 
-  //       action: 'log', 
-  //       message: message 
-  //   });
-  //   // Also log to regular console
-  //   console.log('[ChatTree]', message);
-  // };
+
 
 
   const onNodeContextMenu = useCallback(
