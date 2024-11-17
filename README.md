@@ -41,7 +41,7 @@ ChatGPT conversations can become complex with multiple branches and responses. I
 1. Clone the repository
 
 ```
-git clone https://github.com/rikardradovac/non-linear-chat
+git clone https://github.com/rikardradovac/chat-tree.git
 ```
 
 2. Install dependencies
