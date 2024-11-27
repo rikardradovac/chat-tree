@@ -71,7 +71,7 @@ interface Message {
 interface Node {
     position?: { x: number; y: number };
     id: string;
-    data?: { label: string; role?: string; timestamp?: number, id?: string, hidden?: boolean};
+    data?: { label: string; role?: string; timestamp?: number, id?: string, hidden?: boolean, contentType?: string};
     message: Message | null;
     parent: string | null;
     children: string[];
@@ -161,17 +161,26 @@ const CustomNode = ({ data }: { data: any }) => {
       >
         {!isExpanded && <Handle type="target" position={Position.Top} className="w-2 h-2" />}
         
-        <div className="flex items-center">
-          <div className={`w-2 h-2 rounded-full mr-2 ${
-            data.role === 'user' ? 'bg-yellow-400' : 'bg-gray-400'
-          }`} />
-          <div className="text-xs font-semibold text-gray-500 uppercase">
-            {data.role}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <div className={`w-2 h-2 rounded-full mr-2 ${
+              data.role === 'user' ? 'bg-yellow-400' : 'bg-gray-400'
+            }`} />
+            <div className="text-xs font-semibold text-gray-500 uppercase">
+              {data.role}
+            </div>
           </div>
+          {data.contentType === 'multimodal_text' && (
+            <div>
+              <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="20" height="20" viewBox="0 0 26 26">
+              <path d="M 20.265625 4.207031 C 20.023438 3.96875 19.773438 3.722656 19.527344 3.476563 C 19.277344 3.230469 19.035156 2.980469 18.792969 2.734375 C 17.082031 0.988281 16.0625 0 15 0 L 7 0 C 4.796875 0 3 1.796875 3 4 L 3 22 C 3 24.203125 4.796875 26 7 26 L 19 26 C 21.203125 26 23 24.203125 23 22 L 23 8 C 23 6.9375 22.011719 5.917969 20.265625 4.207031 Z M 21 22 C 21 23.105469 20.105469 24 19 24 L 7 24 C 5.894531 24 5 23.105469 5 22 L 5 4 C 5 2.894531 5.894531 2 7 2 L 14.289063 1.996094 C 15.011719 2.179688 15 3.066406 15 3.953125 L 15 7 C 15 7.550781 15.449219 8 16 8 L 19 8 C 19.996094 8 21 8.003906 21 9 Z"></path>
+              </svg>
+            </div>
+          )}
         </div>
 
         <div className={`mt-2 text-sm text-gray-700 ${
-          isExpanded 
+          isExpanded  
             ? 'h-[calc(100%-100px)] overflow-y-auto nowheel' 
             : 'line-clamp-3'
           }`} 
@@ -329,13 +338,21 @@ const ConversationTree = () => {
         child.parent = node.id;
         child.type = 'custom';
         const role = child.message!.author.role;
-        const content = child.message!.content.parts![0];
+
+        // if the content typ is not 'text', find the string in the content list
+        let content: string = ""
+        if (child.message!.content.content_type !== 'text') {
+          content = child.message!.content.parts!.find(part => typeof part === 'string') ?? 'No text provided';
+        } else {
+          content = child.message!.content.parts![0];
+        }
         child.data = {
           label: content,
           role: role,
           timestamp: child.message!.create_time ?? undefined,
           id: child.id,
-          hidden: true // default to hidden
+          hidden: true, // default to hidden
+          contentType: child.message!.content.content_type
         };
         
         newNodes.push(child);
