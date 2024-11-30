@@ -586,7 +586,7 @@ const ConversationTree = () => {
   if (!conversationData) {
     return (
       <div className="flex items-center justify-center h-screen text-gray-600">
-        No conversation data available, please refresh the page and try again.
+        No chat found, please refresh the web page and try again!
       </div>
     );
   }
