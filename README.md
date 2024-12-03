@@ -90,6 +90,10 @@ This extension requires the `webRequest` permission to:
 
 All data processing happens locally in your browser. No data is sent to external servers.
 
+
+## Todo
+- Edit and send messages directly from the graph
+  
 ## License 📄
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
