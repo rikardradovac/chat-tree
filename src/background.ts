@@ -73,18 +73,48 @@ chrome.runtime.onMessage.addListener(
       return true; // Important for async response
     }
     else if (request.action === "editMessage") {
-      editMessage(request.messageId);
-      sendResponse({ success: true });
-      return true;
+      (async () => {
+        try {
+          await editMessage(request.messageId, request.message);
+          sendResponse({ success: true, completed: true });
+        } catch (error: any) {
+          sendResponse({ 
+            success: false, 
+            completed: false, 
+            error: error.message 
+          });
+        }
+      })();
+      return true; // Keep message channel open for async response
     }
     else if (request.action === "respondToMessage") {
-      respondToMessage(request.childrenIds);
-      sendResponse({ success: true });
-      return true;
+      (async () => {
+        try {
+          await respondToMessage(request.childrenIds, request.message);
+          sendResponse({ success: true, completed: true });
+        } catch (error: any) {
+          sendResponse({ 
+            success: false, 
+            completed: false, 
+            error: error.message 
+          });
+        }
+      })();
+      return true; // Keep message channel open for async response
     } else if (request.action === "executeSteps") {
-      selectBranch(request.steps);
-      sendResponse({ success: true });
-      return true;
+      (async () => {
+        try {
+          await selectBranch(request.steps);
+          sendResponse({ success: true, completed: true });
+        } catch (error: any) {
+          sendResponse({ 
+            success: false, 
+            completed: false, 
+            error: error.message 
+          });
+        }
+      })();
+      return true; // Keep message channel open for async response
     } else if (request.action === "goToTarget") {
       goToTarget(request.targetId);
       sendResponse({ success: true });
@@ -94,7 +124,7 @@ chrome.runtime.onMessage.addListener(
       sendResponse({ success: true });
       return true;
     }
-    return true;
+    return false; // For non-async handlers
   }
 );
 
@@ -165,24 +195,19 @@ async function checkNodesExistence(nodeIds: string[]) {
   }
 }
 
-async function editMessage(messageId: string) {
+async function editMessage(messageId: string, message: string) {
 
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const currentTab = tabs[0];
 
   await chrome.scripting.executeScript({
     target: { tabId: currentTab.id ?? 0 },
-    func: (messageId) => {
+    func: (messageId, message) => {
       // find the message id and scroll to it
       const element = document.querySelector(`[data-message-id="${messageId}"]`);
       if (element) {
-
         const buttonDiv = element.parentElement?.parentElement;
         if (buttonDiv) {
-          // First scroll to position
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          
-          // Wait a brief moment before clicking the edit button
           setTimeout(() => {
             const buttons = buttonDiv.querySelectorAll("button");
             const buttonIndex = Array.from(buttons).findIndex(button => button.getAttribute('aria-label') === "Edit message");
@@ -191,28 +216,56 @@ async function editMessage(messageId: string) {
             } else {
               throw new Error(`Button with required aria-label not found`);
             }
-            
-            // Add another scroll after a slight delay to maintain position
+
             setTimeout(() => {
+              const textArea = buttonDiv.querySelector("textarea");
+              if (textArea) {
+                textArea.value = message;
+                textArea.dispatchEvent(new Event('input', { bubbles: true }));
+              }
               element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+              // since we have edited the message in place now, we only have to click on the "send" button and then force an update
+
+              let currentElement: Element | null = textArea;
+              let sendButton: HTMLButtonElement | null = null;
+              let iterations = 0;
+              
+              while (currentElement && iterations < 10) {
+                const buttons = currentElement.querySelectorAll('button');
+                sendButton = Array.from(buttons).find(button => button.textContent?.trim() === 'Send') as HTMLButtonElement || null;
+                if (sendButton) break;
+                
+                currentElement = currentElement.parentElement;
+                iterations++;
+              }
+              
+              setTimeout(() => {
+                if (sendButton) {
+                  sendButton.click();
+                }
+              }, 1000);
+              if (sendButton) {
+                sendButton.click();
+              }
             }, 100);
           }, 100);
+
         }
-        
       }
     },
-    args: [messageId]
+    args: [messageId, message]
   });
 }
 
 
-async function respondToMessage(childrenIds: string[]) {
+async function respondToMessage(childrenIds: string[], message: string) {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const currentTab = tabs[0];
 
   await chrome.scripting.executeScript({
     target: { tabId: currentTab.id ?? 0 },
-    func: (childrenIds) => {
+    func: (childrenIds: string[], message: string) => {
       let element = null;
 
       // since not all childrenIds are visible, we need to find the one that is
@@ -226,8 +279,6 @@ async function respondToMessage(childrenIds: string[]) {
       if (element) {
         const buttonDiv = element.parentElement?.parentElement;
         if (buttonDiv) {
-          
-          // Wait a brief moment before clicking the edit button
           setTimeout(() => {
             const buttons = buttonDiv.querySelectorAll("button");
             const buttonIndex = Array.from(buttons).findIndex(button => button.getAttribute('aria-label') === "Edit message");
@@ -236,24 +287,48 @@ async function respondToMessage(childrenIds: string[]) {
             } else {
               throw new Error(`Button with required aria-label not found`);
             }
-            
-            // Add another scroll after a slight delay to maintain position
-            setTimeout(() => {
 
-              // clear the text area so the user can respond
+            setTimeout(() => {
               const textArea = buttonDiv.querySelector("textarea");
               if (textArea) {
-                  textArea.value = "";
-
-                  textArea.dispatchEvent(new Event('input', { bubbles: true }));
+                textArea.value = message;
+                textArea.dispatchEvent(new Event('input', { bubbles: true }));
               }
               element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+              // since we have edited the message in place now, we only have to click on the "send" button and then force an update
+
+              let currentElement: Element | null = textArea;
+              let sendButton: HTMLButtonElement | null = null;
+              let iterations = 0;
+              
+              while (currentElement && iterations < 10) {
+                const buttons = currentElement.querySelectorAll('button');
+                sendButton = Array.from(buttons).find(button => button.textContent?.trim() === 'Send') as HTMLButtonElement || null;
+                if (sendButton) break;
+                
+                currentElement = currentElement.parentElement;
+                iterations++;
+              }
+
+
+              // sometimes being too fast is bad, but relying on timeout should not be the way   
+              setTimeout(() => {
+                if (sendButton) {
+                  sendButton.click();
+                }
+              }, 1000);
+              
+              if (sendButton) {
+                sendButton.click();
+              }
             }, 100);
           }, 100);
+
         }
       }
     },
-    args: [childrenIds]
+    args: [childrenIds, message]
   });
 }
 

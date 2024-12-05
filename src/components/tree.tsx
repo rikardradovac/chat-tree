@@ -112,6 +112,7 @@ interface ConversationData {
 
 type MenuState = {
     messageId: string;
+    message: string;
     childrenIds: string[];
     role: string;
     top: number | boolean;
@@ -474,6 +475,7 @@ const ConversationTree = () => {
       if (pane) {
         setMenu({
           messageId: nodeId,
+          message: node.data!.label,
           childrenIds: node.children,
           role: node.data?.role ?? '',
           top: event.clientY < pane.height - 200 && event.clientY ? event.clientY - 48 : false,
@@ -488,11 +490,11 @@ const ConversationTree = () => {
     [setMenu],
   );
 
-  // Close the context menu if it's open whenever the window is clicked.
+  // Close the context menu if it's open whenever outside of the window is clicked.
   const onPaneClick = useCallback(() => setMenu(null), [setMenu]);
 
     // update the visibility of the nodes based on the DOM
-    const updateNodesVisibility = useCallback(async () => {
+  const updateNodesVisibility = useCallback(async () => {
         const nodeIds = nodes.map((node: Node) => node.id);
         const existingNodes = await checkNodes(nodeIds);
         
@@ -505,7 +507,7 @@ const ConversationTree = () => {
                 }
             }))
         );
-    }, [nodes]);
+  }, [nodes]);
 
 
   const onConnect = useCallback(
@@ -630,6 +632,7 @@ const ConversationTree = () => {
           onClick={onPaneClick} 
           onNodeClick={handleNodeClick} 
           onRefresh={updateNodesVisibility}
+          refreshNodes={handleRefresh}
           {...menu} 
         />}
       </ReactFlow>
