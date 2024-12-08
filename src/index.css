@@ -31,3 +31,8 @@ body {
   transform: scale(0.8);
   transform-origin: bottom right;
 }
+
+/* Hide ReactFlow attribution */
+.react-flow__attribution {
+  display: none;
+}
