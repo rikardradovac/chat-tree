@@ -618,6 +618,7 @@ const ConversationTree = () => {
         onPaneClick={onPaneClick}
         onInit={instance => { reactFlowInstance.current = instance; }}
         fitView
+        proOptions={{ hideAttribution: true }}
         minZoom={0.1}
         maxZoom={1.5}
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
