@@ -168,6 +168,9 @@ async function fetchConversationHistory() {
     });
     
     const data = await response.json();
+    if (!data) {
+      throw new Error('No data received');
+    }
     return data;
   } catch (error) {
     console.error('Error in fetchConversationHistory:', error);

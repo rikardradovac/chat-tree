@@ -1,10 +1,10 @@
-import ChatGraph from "./components/tree"
+import Tree from "./components/ConversationTree";
 
 function App() {
   return (
     <div className="w-full h-screen flex flex-col">
       <div className="flex-1 overflow-hidden">
-        <ChatGraph />
+        <Tree />
       </div>
     </div>
   );
