@@ -13,12 +13,29 @@ export const CustomNode = ({ data }: { data: any }) => {
     // State to track if the node is expanded to full screen
     const [isExpanded, setIsExpanded] = useState(false);
   
+    const getNodeStyle = (role: string) => {
+      if (role === 'user') {
+        return { /* user styles */ };
+      } else if (role === 'assistant') {
+        return { /* assistant styles */ };
+      } else if (role === 'system') {
+        return { 
+          backgroundColor: '#ffffff',
+          border: '1px solid #000000',
+          borderRadius: '4px',
+          // Add any other styling you want for the system/start node
+        };
+      } else {
+        return { /* default styles */ };
+      }
+    };
+  
     return (
       <>
         <div 
           // Dynamic classes for styling based on role (user/assistant), visibility, and expansion state
           className={`px-4 py-2 shadow-lg rounded-lg border transition-all duration-300 
-            ${data.role === 'user' ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200'}
+            ${data.role === 'user' ? 'bg-yellow-50 border-yellow-200' : data.role === 'assistant' ? 'bg-gray-50 border-gray-200' : 'bg-gray-50 border-gray-200'}
             ${data.hidden ? 'grayscale' : ''}
             ${isExpanded ? 'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-[80vw] h-[80vh]' : ''}
           `} 
@@ -28,7 +45,8 @@ export const CustomNode = ({ data }: { data: any }) => {
             height: isExpanded ? undefined : nodeHeight,
             position: isExpanded ? 'fixed' : 'relative',
             opacity: data.hidden && !isExpanded ? 0.4 : 1,
-            background: data.hidden && !isExpanded ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px)' : undefined
+            background: data.hidden && !isExpanded ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px)' : undefined,
+            ...getNodeStyle(data.role)
           }}
           onDoubleClick={() => setIsExpanded(!isExpanded)}
         >
@@ -39,7 +57,7 @@ export const CustomNode = ({ data }: { data: any }) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <div className={`w-2 h-2 rounded-full mr-2 ${
-                data.role === 'user' ? 'bg-yellow-400' : 'bg-gray-400'
+                data.role === 'user' ? 'bg-yellow-400' : data.role === 'assistant' ? 'bg-gray-400' : 'bg-gray-400'
               }`} />
               <div className="text-xs font-semibold text-gray-500 uppercase">
                 {data.role}

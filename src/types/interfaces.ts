@@ -48,7 +48,7 @@ export interface Message {
 }
 
 export interface Node {
-    position?: { x: number; y: number };
+    position: { x: number; y: number };
     id: string;
     data?: { label: string; role?: string; timestamp?: number, id?: string, hidden?: boolean, contentType?: string, model_slug?: string};
     message: Message | null;
@@ -64,6 +64,7 @@ export interface Edge {
     type: string;
     animated?: boolean;
     style?: any;
+    [key: string]: any;
 }
 
 export interface Mapping {
@@ -87,6 +88,10 @@ export interface ConversationData {
     conversation_origin: string | null;
     voice: string | null;
     async_status: string | null;
+    gizmo_type?: string | null;
+    is_starred?: boolean | null;
+    disabled_tool_ids?: string[] | any[];
+    [key: string]: any;
 }
 
 export type MenuState = {

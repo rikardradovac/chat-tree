@@ -44,8 +44,8 @@ const ConversationTree = () => {
           setIsLoading(false);
         })
         .catch(error => {
-          console.error(error);
           setIsLoading(false);
+          console.error("Error creating nodes:", error);
         });
     }
   }, [conversationData]);
@@ -63,12 +63,16 @@ const ConversationTree = () => {
       if (response.success) {
         setConversationData(response.data);
         // Fit view after nodes are rendered
-        setTimeout(() => reactFlowInstance.current?.fitView(), 100);
+        setTimeout(() => {
+          if (reactFlowInstance.current) {
+            reactFlowInstance.current.fitView();
+          }
+        }, 100);
       } else {
         console.error('Failed to fetch conversation data:', response.error);
       }
     } catch (error) {
-      console.error('Error fetching conversation data:', error);
+      console.error('Error in handleRefresh:', error);
     } finally {
       setIsLoading(false);
     }
@@ -123,7 +127,9 @@ const ConversationTree = () => {
         nodeTypes={nodeTypes}
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
-        onInit={instance => { reactFlowInstance.current = instance; }}
+        onInit={instance => { 
+          reactFlowInstance.current = instance;
+        }}
         fitView
         proOptions={{ hideAttribution: true }}
         minZoom={0.1}

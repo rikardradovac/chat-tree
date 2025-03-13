@@ -46,9 +46,14 @@ export const createNodesInOrder = async (
       const role = child.message!.author.role;
 
       // Extract content based on content type
-      let content: string = child.message!.content.content_type !== 'text'
-        ? child.message!.content.parts!.find(part => typeof part === 'string') ?? 'No text provided'
-        : child.message!.content.parts![0];
+      let content: string = 'No content available';
+      if (child.message?.content?.parts && child.message.content.parts.length > 0) {
+        if (child.message.content.content_type !== 'text') {
+          content = child.message.content.parts.find(part => typeof part === 'string') ?? 'No text provided';
+        } else {
+          content = child.message.content.parts[0] || 'Empty content';
+        }
+      }
 
       // Set node data and visual properties
       child.data = {
@@ -85,13 +90,21 @@ export const createNodesInOrder = async (
   if (!rootNode) return { nodes: [], edges: [] };
 
   // Initialize root node properties
+  let rootLabel = 'Start of your conversation';
+  if (rootNode.message?.content?.parts && rootNode.message.content.parts.length > 0 && 
+      rootNode.message.author.role !== 'system') {
+    rootLabel = rootNode.message.content.parts[0] || 'Empty content';
+  }
+
   rootNode.type = 'custom';
   rootNode.data = {
-    label: rootNode.message!.author.role !== 'system' 
-      ? rootNode.message!.content.parts![0] 
-      : 'Start of your conversation',
-    role: rootNode.message!.author.role,
-    timestamp: rootNode.message?.create_time ?? undefined
+    label: rootLabel,
+    role: rootNode.message?.author?.role || 'system',
+    timestamp: rootNode.message?.create_time ?? undefined,
+    id: rootNode.id,
+    hidden: true,
+    contentType: rootNode.message?.content?.content_type || 'text',
+    model_slug: rootNode.message?.metadata?.model_slug ?? undefined
   };
   
   newNodes.push(rootNode);
