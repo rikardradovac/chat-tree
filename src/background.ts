@@ -55,6 +55,8 @@ chrome.runtime.onMessage.addListener(
     else if (request.action === "fetchConversationHistory") {
       fetchConversationHistory()
         .then(data => {
+          // After fetching conversation history, trigger native events
+          triggerNativeArticleEvents();
           sendResponse({ success: true, data });
         })
         .catch(error => {
@@ -123,10 +125,179 @@ chrome.runtime.onMessage.addListener(
       console.log(request.message);
       sendResponse({ success: true });
       return true;
+    } else if (request.action === "triggerNativeEvents") {
+      triggerNativeArticleEvents();
+      sendResponse({ success: true });
+      return true;
     }
     return false; // For non-async handlers
   }
 );
+
+// Function to trigger native events for all article elements in the page
+async function triggerNativeArticleEvents() {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const currentTab = tabs[0];
+
+  if (!currentTab?.id) {
+    console.error('No active tab found for triggering native events');
+    return;
+  }
+
+  await chrome.scripting.executeScript({
+    target: { tabId: currentTab.id },
+    func: () => {
+      function triggerNativeEvents(element: Element) {
+        if (!element) {
+          console.error("triggerNativeEvents: Element is null or undefined.");
+          return;
+        }
+
+        const eventTypes = [
+          'mouseover', 'mouseenter', 'mousemove', 'mousedown', 'mouseup', 'click',
+          'pointerover', 'pointerenter', 'pointerdown', 'pointerup', 'pointermove', 'pointercancel',
+          'focus', 'focusin'
+        ];
+
+        for (const eventType of eventTypes) {
+          try {
+            const event = new MouseEvent(eventType, {
+              bubbles: true,
+              cancelable: true,
+              view: window,
+            });
+
+            Object.defineProperty(event, 'target', {
+              value: element,
+              enumerable: true,
+              configurable: true
+            });
+            Object.defineProperty(event, 'currentTarget', {
+              value: element,
+              enumerable: true,
+              configurable: true
+            });
+
+            element.dispatchEvent(event);
+            // console.log(`Dispatched native ${eventType} event on:`, element); // Optional logging
+          } catch (error) {
+            console.error(`Error dispatching ${eventType} event:`, error);
+          }
+        }
+      }
+
+      // Keep track of triggered elements.
+      const triggeredElements = new Set<Element>();
+
+      function processArticle(article: Element) {
+        if (!triggeredElements.has(article)) { //only if not already triggered
+          // Trigger events on the article itself.
+          triggerNativeEvents(article);
+
+          // Trigger events on each direct child of the article.
+          Array.from(article.children).forEach(child => {
+            triggerNativeEvents(child);
+          });
+          triggeredElements.add(article); //remember we triggered.
+        }
+      }
+
+      function findAndTriggerEvents() {
+        const articles = document.querySelectorAll('article[data-testid^="conversation-turn-"]');
+        console.log(`Found ${articles.length} articles at this time.`);
+        articles.forEach(processArticle);
+      }
+
+      // Add a polling mechanism to check for new articles
+      // This is useful when new messages are sent or received
+      function startPollingForNewArticles() {
+        let previousArticleCount = document.querySelectorAll('article[data-testid^="conversation-turn-"]').length;
+        
+        // Check every 2 seconds for changes in the number of articles
+        const pollingInterval = setInterval(() => {
+          const currentArticleCount = document.querySelectorAll('article[data-testid^="conversation-turn-"]').length;
+          
+          // If there are new articles, trigger events on them
+          if (currentArticleCount > previousArticleCount) {
+            console.log(`New articles detected: ${currentArticleCount - previousArticleCount}`);
+            findAndTriggerEvents();
+          }
+          
+          previousArticleCount = currentArticleCount;
+          
+          // The MutationObserver should catch most changes after this initial polling
+        }, 2000);
+        
+        // Stop polling after 30 seconds to avoid unnecessary resource usage
+        setTimeout(() => {
+          clearInterval(pollingInterval);
+          console.log("Stopped polling for new articles");
+        }, 30000);
+      }
+
+      function init() {
+        // 1. Initial Check
+        findAndTriggerEvents();
+        
+        // Start polling for new articles
+        startPollingForNewArticles();
+
+        // 2. MutationObserver (Targeted)
+        // Try to find a more specific parent container to observe.
+        const parentContainerSelector = '.mt-1\\.5\\.flex\\.flex-col\\.text-sm\\.\\@thread-xl\\/thread\\:pt-header-height\\.md\\:pb-9'; // Example - adjust if needed!
+        const parentContainer = document.querySelector(parentContainerSelector);
+
+        const observer = new MutationObserver(() => {
+          findAndTriggerEvents();
+        });
+
+        // If a specific parent container is found, observe it. Otherwise, observe the body.
+        const observeTarget = parentContainer || document.body;
+        observer.observe(observeTarget, { childList: true, subtree: true });
+        console.log("MutationObserver set up on:", observeTarget);
+        
+        // Also observe the main chat container for message send events
+        const chatContainer = document.querySelector('main');
+        if (chatContainer) {
+          const chatObserver = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+              if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                // If new nodes were added, check for new articles and restart polling
+                setTimeout(() => {
+                  findAndTriggerEvents();
+                  startPollingForNewArticles();
+                }, 500);
+                break;
+              }
+            }
+          });
+          
+          chatObserver.observe(chatContainer, { childList: true, subtree: true });
+          console.log("Chat MutationObserver set up");
+        }
+      }
+
+      // Check if we've already initialized to avoid duplicate observers
+      // Use a data attribute on body instead of a window property
+      const isInitialized = document.body.hasAttribute('data-events-initialized');
+      if (!isInitialized) {
+        document.body.setAttribute('data-events-initialized', 'true');
+        
+        // Ensure DOM is ready
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", init);
+        } else {
+          init();
+        }
+      } else {
+        // If already initialized, just trigger events for any new articles
+        findAndTriggerEvents();
+      }
+    }
+  }).catch(error => {
+    console.error('Error executing triggerNativeArticleEvents:', error);
+  });
+}
 
 // fetch the conversation history
 async function fetchConversationHistory() {
@@ -171,6 +342,10 @@ async function fetchConversationHistory() {
     if (!data) {
       throw new Error('No data received');
     }
+    
+    // Trigger native events after fetching conversation history
+    await triggerNativeArticleEvents();
+    
     return data;
   } catch (error) {
     console.error('Error in fetchConversationHistory:', error);
@@ -473,7 +648,7 @@ async function selectBranch(stepsToTake: any[]) {
               }
 
               const buttons = buttonDiv.querySelectorAll("button");
-              if (!buttons || buttons.length < 3) {
+              if (!buttons || buttons.length < 2) {
                 throw new Error(`Required buttons not found for nodeId: ${step.nodeId}`);
               }
 
@@ -553,6 +728,12 @@ chrome.tabs.onUpdated.addListener(async (tabId, _info, tab) => {
         path: 'index.html',
         enabled: true
       });
+      
+      // Trigger native events when a ChatGPT page is loaded or updated
+      // Wait a bit for the page to fully load
+      setTimeout(() => {
+        triggerNativeArticleEvents();
+      }, 1500);
     } else {
       await chrome.sidePanel.setOptions({
         tabId,
@@ -575,6 +756,12 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
       path: 'index.html',
       enabled: true
     });
+    
+    // Trigger native events when switching to a ChatGPT tab
+    // Wait a bit for the page to be fully active
+    setTimeout(() => {
+      triggerNativeArticleEvents();
+    }, 500);
   } else {
     await chrome.sidePanel.setOptions({
       tabId: activeInfo.tabId,
