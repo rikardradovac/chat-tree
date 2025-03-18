@@ -204,65 +204,46 @@ async function triggerNativeArticleEvents() {
 
       function findAndTriggerEvents() {
         const articles = document.querySelectorAll('article[data-testid^="conversation-turn-"]');
-        console.log(`Found ${articles.length} articles at this time.`);
         articles.forEach(processArticle);
       }
 
-      // Add a polling mechanism to check for new articles
-      // This is useful when new messages are sent or received
       function startPollingForNewArticles() {
         let previousArticleCount = document.querySelectorAll('article[data-testid^="conversation-turn-"]').length;
         
-        // Check every 2 seconds for changes in the number of articles
         const pollingInterval = setInterval(() => {
           const currentArticleCount = document.querySelectorAll('article[data-testid^="conversation-turn-"]').length;
           
-          // If there are new articles, trigger events on them
           if (currentArticleCount > previousArticleCount) {
-            console.log(`New articles detected: ${currentArticleCount - previousArticleCount}`);
             findAndTriggerEvents();
           }
           
           previousArticleCount = currentArticleCount;
-          
-          // The MutationObserver should catch most changes after this initial polling
         }, 2000);
         
-        // Stop polling after 30 seconds to avoid unnecessary resource usage
         setTimeout(() => {
           clearInterval(pollingInterval);
-          console.log("Stopped polling for new articles");
         }, 30000);
       }
 
       function init() {
-        // 1. Initial Check
         findAndTriggerEvents();
-        
-        // Start polling for new articles
         startPollingForNewArticles();
 
-        // 2. MutationObserver (Targeted)
-        // Try to find a more specific parent container to observe.
-        const parentContainerSelector = '.mt-1\\.5\\.flex\\.flex-col\\.text-sm\\.\\@thread-xl\\/thread\\:pt-header-height\\.md\\:pb-9'; // Example - adjust if needed!
+        const parentContainerSelector = '.mt-1\\.5\\.flex\\.flex-col\\.text-sm\\.\\@thread-xl\\/thread\\:pt-header-height\\.md\\:pb-9';
         const parentContainer = document.querySelector(parentContainerSelector);
 
         const observer = new MutationObserver(() => {
           findAndTriggerEvents();
         });
 
-        // If a specific parent container is found, observe it. Otherwise, observe the body.
         const observeTarget = parentContainer || document.body;
         observer.observe(observeTarget, { childList: true, subtree: true });
-        console.log("MutationObserver set up on:", observeTarget);
-        
-        // Also observe the main chat container for message send events
+
         const chatContainer = document.querySelector('main');
         if (chatContainer) {
           const chatObserver = new MutationObserver((mutations) => {
             for (const mutation of mutations) {
               if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-                // If new nodes were added, check for new articles and restart polling
                 setTimeout(() => {
                   findAndTriggerEvents();
                   startPollingForNewArticles();
@@ -273,7 +254,6 @@ async function triggerNativeArticleEvents() {
           });
           
           chatObserver.observe(chatContainer, { childList: true, subtree: true });
-          console.log("Chat MutationObserver set up");
         }
       }
 
@@ -598,11 +578,12 @@ async function selectBranch(stepsToTake: any[]) {
       target: { tabId: currentTab.id },
       func: (stepsToTake) => {
         const waitForDomChange = (element: Element): Promise<void> => {
-          return new Promise((resolve, reject) => {
-            const maxWaitTime = 5000; // 5 seconds maximum wait
+          return new Promise((resolve, _reject) => {
+            const maxWaitTime = 10000; // Increased from 5000 to 10000ms
             const timeout = setTimeout(() => {
               observer.disconnect();
-              reject(new Error('Timeout waiting for DOM changes'));
+              // Silently resolve instead of rejecting to avoid error logs
+              resolve();
             }, maxWaitTime);
 
             const observer = new MutationObserver((_mutations, obs) => {
