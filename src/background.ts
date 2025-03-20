@@ -55,6 +55,8 @@ chrome.runtime.onMessage.addListener(
     else if (request.action === "fetchConversationHistory") {
       fetchConversationHistory()
         .then(data => {
+          // After fetching conversation history, trigger native events
+          triggerNativeArticleEvents();
           sendResponse({ success: true, data });
         })
         .catch(error => {
@@ -123,10 +125,159 @@ chrome.runtime.onMessage.addListener(
       console.log(request.message);
       sendResponse({ success: true });
       return true;
+    } else if (request.action === "triggerNativeEvents") {
+      triggerNativeArticleEvents();
+      sendResponse({ success: true });
+      return true;
     }
     return false; // For non-async handlers
   }
 );
+
+// Function to trigger native events for all article elements in the page
+async function triggerNativeArticleEvents() {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const currentTab = tabs[0];
+
+  if (!currentTab?.id) {
+    console.error('No active tab found for triggering native events');
+    return;
+  }
+
+  await chrome.scripting.executeScript({
+    target: { tabId: currentTab.id },
+    func: () => {
+      function triggerNativeEvents(element: Element) {
+        if (!element) {
+          console.error("triggerNativeEvents: Element is null or undefined.");
+          return;
+        }
+
+        const eventTypes = [
+          'mouseover', 'mouseenter', 'mousemove', 'mousedown', 'mouseup', 'click',
+          'pointerover', 'pointerenter', 'pointerdown', 'pointerup', 'pointermove', 'pointercancel',
+          'focus', 'focusin'
+        ];
+
+        for (const eventType of eventTypes) {
+          try {
+            const event = new MouseEvent(eventType, {
+              bubbles: true,
+              cancelable: true,
+              view: window,
+            });
+
+            Object.defineProperty(event, 'target', {
+              value: element,
+              enumerable: true,
+              configurable: true
+            });
+            Object.defineProperty(event, 'currentTarget', {
+              value: element,
+              enumerable: true,
+              configurable: true
+            });
+
+            element.dispatchEvent(event);
+            // console.log(`Dispatched native ${eventType} event on:`, element); // Optional logging
+          } catch (error) {
+            console.error(`Error dispatching ${eventType} event:`, error);
+          }
+        }
+      }
+
+      // Keep track of triggered elements.
+      const triggeredElements = new Set<Element>();
+
+      function processArticle(article: Element) {
+        if (!triggeredElements.has(article)) { //only if not already triggered
+          // Trigger events on the article itself.
+          triggerNativeEvents(article);
+
+          // Trigger events on each direct child of the article.
+          Array.from(article.children).forEach(child => {
+            triggerNativeEvents(child);
+          });
+          triggeredElements.add(article); //remember we triggered.
+        }
+      }
+
+      function findAndTriggerEvents() {
+        const articles = document.querySelectorAll('article[data-testid^="conversation-turn-"]');
+        articles.forEach(processArticle);
+      }
+
+      function startPollingForNewArticles() {
+        let previousArticleCount = document.querySelectorAll('article[data-testid^="conversation-turn-"]').length;
+        
+        const pollingInterval = setInterval(() => {
+          const currentArticleCount = document.querySelectorAll('article[data-testid^="conversation-turn-"]').length;
+          
+          if (currentArticleCount > previousArticleCount) {
+            findAndTriggerEvents();
+          }
+          
+          previousArticleCount = currentArticleCount;
+        }, 2000);
+        
+        setTimeout(() => {
+          clearInterval(pollingInterval);
+        }, 30000);
+      }
+
+      function init() {
+        findAndTriggerEvents();
+        startPollingForNewArticles();
+
+        const parentContainerSelector = '.mt-1\\.5\\.flex\\.flex-col\\.text-sm\\.\\@thread-xl\\/thread\\:pt-header-height\\.md\\:pb-9';
+        const parentContainer = document.querySelector(parentContainerSelector);
+
+        const observer = new MutationObserver(() => {
+          findAndTriggerEvents();
+        });
+
+        const observeTarget = parentContainer || document.body;
+        observer.observe(observeTarget, { childList: true, subtree: true });
+
+        const chatContainer = document.querySelector('main');
+        if (chatContainer) {
+          const chatObserver = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+              if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                setTimeout(() => {
+                  findAndTriggerEvents();
+                  startPollingForNewArticles();
+                }, 500);
+                break;
+              }
+            }
+          });
+          
+          chatObserver.observe(chatContainer, { childList: true, subtree: true });
+        }
+      }
+
+      // Check if we've already initialized to avoid duplicate observers
+      // Use a data attribute on body instead of a window property
+      const isInitialized = document.body.hasAttribute('data-events-initialized');
+      if (!isInitialized) {
+        document.body.setAttribute('data-events-initialized', 'true');
+        
+        // Ensure DOM is ready
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", init);
+        } else {
+          init();
+        }
+      } else {
+        // If already initialized, just trigger events for any new articles
+        findAndTriggerEvents();
+      }
+    }
+  }).catch(error => {
+    console.error('Error executing triggerNativeArticleEvents:', error);
+  });
+}
 
 // fetch the conversation history
 async function fetchConversationHistory() {
@@ -171,6 +322,10 @@ async function fetchConversationHistory() {
     if (!data) {
       throw new Error('No data received');
     }
+    
+    // Trigger native events after fetching conversation history
+    await triggerNativeArticleEvents();
+    
     return data;
   } catch (error) {
     console.error('Error in fetchConversationHistory:', error);
@@ -422,32 +577,40 @@ async function selectBranch(stepsToTake: any[]) {
     await chrome.scripting.executeScript({
       target: { tabId: currentTab.id },
       func: (stepsToTake) => {
-        const waitForDomChange = (element: Element): Promise<void> => {
-          return new Promise((resolve, reject) => {
-            const maxWaitTime = 5000; // 5 seconds maximum wait
+        // Optimized DOM change detection with shorter timeout
+        const waitForDomChange = (): Promise<void> => {
+          return new Promise((resolve) => {
+            // Much shorter timeout - just enough for the UI to update
+            const maxWaitTime = 500;
+            
             const timeout = setTimeout(() => {
               observer.disconnect();
-              reject(new Error('Timeout waiting for DOM changes'));
+              resolve();
             }, maxWaitTime);
 
-            const observer = new MutationObserver((_mutations, obs) => {
-              clearTimeout(timeout);
-              obs.disconnect();
-              resolve();
+            const observer = new MutationObserver((mutations) => {
+              // Check if we have meaningful mutations that suggest content change
+              if (mutations.some(m => 
+                  m.type === 'childList' && (m.addedNodes.length > 0 || m.removedNodes.length > 0) ||
+                  (m.type === 'attributes' && ['style', 'class'].includes(m.attributeName || '')))) {
+                clearTimeout(timeout);
+                observer.disconnect();
+                resolve();
+              }
             });
 
-            observer.observe(element, {
+            // Observe the main content area for faster detection
+            const mainContent = document.querySelector('main') || document.body;
+            observer.observe(mainContent, {
               childList: true,
               subtree: true,
               attributes: true,
-              characterData: true
+              attributeFilter: ['style', 'class', 'aria-hidden']
             });
           });
         };
 
-        // Process steps sequentially using async/await
-        let prevId: string | null = null;
-        let buttonDiv: Element | null | undefined = null;
+        // Process all steps as fast as possible
         const processSteps = async () => {
           try {
             for (const step of stepsToTake) {
@@ -455,48 +618,29 @@ async function selectBranch(stepsToTake: any[]) {
                 throw new Error('Step missing nodeId');
               }
 
-              if (prevId !== step.nodeId) {
-                // if the node is different from the previous one, we need to find the new buttonDiv
-                const element = document.querySelector(`[data-message-id="${step.nodeId}"]`);
-                if (!element) {
-                  throw new Error(`Element not found for nodeId: ${step.nodeId}`);
-                }
-                
-                buttonDiv = element.parentElement?.parentElement;
-                if (!buttonDiv) {
-                  throw new Error(`Button container not found for nodeId: ${step.nodeId}`);
-                }
+              // Find the target element
+              const element = document.querySelector(`[data-message-id="${step.nodeId}"]`);
+              if (!element) {
+                throw new Error(`Element not found for nodeId: ${step.nodeId}`);
               }
-
+              
+              const buttonDiv = element.parentElement?.parentElement;
               if (!buttonDiv) {
                 throw new Error(`Button container not found for nodeId: ${step.nodeId}`);
               }
 
-              const buttons = buttonDiv.querySelectorAll("button");
-              if (!buttons || buttons.length < 3) {
-                throw new Error(`Required buttons not found for nodeId: ${step.nodeId}`);
-              }
-
-              // Find the button with the correct aria-label based on direction
-              const buttonIndex = Array.from(buttons).findIndex(button => {
-                const ariaLabel = button.getAttribute('aria-label');
-                return step.stepsLeft > 0 ? 
-                  ariaLabel === "Previous response" :
-                  ariaLabel === "Next response";
-              });
-
-              if (buttonIndex === -1) {
+              // Find the navigation button by aria-label
+              const targetLabel = step.stepsLeft > 0 ? "Previous response" : "Next response";
+              const buttons = Array.from(buttonDiv.querySelectorAll("button"));
+              const button = buttons.find(btn => btn.getAttribute('aria-label') === targetLabel);
+              
+              if (!button) {
                 throw new Error(`Button with required aria-label not found for nodeId: ${step.nodeId}`);
               }
-              buttons[buttonIndex].click();
-              
-              try {
-                prevId = step.nodeId;
-                await waitForDomChange(buttonDiv);
-              } catch (error) {
-                console.error('Error waiting for DOM change:', error);
-                throw error;
-              }
+
+              // Click the button and wait for DOM changes
+              button.click();
+              await waitForDomChange();
             }
           } catch (error) {
             console.error('Error processing steps:', error);
@@ -504,14 +648,9 @@ async function selectBranch(stepsToTake: any[]) {
           }
         };
 
-        processSteps().catch(error => {
-          console.error('Failed to process steps:', error);
-        });
+        return processSteps();
       },
       args: [stepsToTake]
-    }).catch(error => {
-      console.error('Script execution failed:', error);
-      throw error;
     });
 
   } catch (error) {
@@ -553,6 +692,12 @@ chrome.tabs.onUpdated.addListener(async (tabId, _info, tab) => {
         path: 'index.html',
         enabled: true
       });
+      
+      // Trigger native events when a ChatGPT page is loaded or updated
+      // Wait a bit for the page to fully load
+      setTimeout(() => {
+        triggerNativeArticleEvents();
+      }, 1500);
     } else {
       await chrome.sidePanel.setOptions({
         tabId,
@@ -563,6 +708,9 @@ chrome.tabs.onUpdated.addListener(async (tabId, _info, tab) => {
     console.error('Error in onUpdated listener:', error);
   }
 });
+
+
+
 
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   const tab = await chrome.tabs.get(activeInfo.tabId);
@@ -575,6 +723,12 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
       path: 'index.html',
       enabled: true
     });
+    
+    // Trigger native events when switching to a ChatGPT tab
+    // Wait a bit for the page to be fully active
+    setTimeout(() => {
+      triggerNativeArticleEvents();
+    }, 500);
   } else {
     await chrome.sidePanel.setOptions({
       tabId: activeInfo.tabId,
