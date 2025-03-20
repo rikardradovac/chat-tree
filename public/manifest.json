@@ -1,7 +1,7 @@
 {
     "name": "ChatTree",
     "description": "Visualize ChatGPT conversations as interactive trees",
-    "version": "0.0.8",
+    "version": "0.0.9",
     "manifest_version": 3,
     "icons": {
         "16": "logo16.png",
