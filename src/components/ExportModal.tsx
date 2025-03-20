@@ -1,7 +1,6 @@
-
 interface ExportModalProps {
   onClose: () => void;
-  onExport: (format: 'markdown' | 'xml') => void;
+  onExport: (format: 'markdown' | 'xml' | 'obsidian') => void;
   visibleNodesCount: number;
 }
 
@@ -13,16 +12,22 @@ export const ExportModal = ({ onClose, onExport, visibleNodesCount }: ExportModa
         <p className="text-sm text-gray-600 mb-6">
           Only the currently visible branch ({visibleNodesCount} messages) will be exported.
         </p>
-        <div className="flex gap-4">
+        <div className="flex flex-col gap-3">
           <button
             onClick={() => onExport('markdown')}
-            className="flex-1 bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
           >
             Export as Markdown
           </button>
           <button
+            onClick={() => onExport('obsidian')}
+            className="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition-colors"
+          >
+            Export for Obsidian
+          </button>
+          <button
             onClick={() => onExport('xml')}
-            className="flex-1 bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
+            className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
           >
             Export as XML
           </button>

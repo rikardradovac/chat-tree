@@ -10,8 +10,7 @@ interface ExportButtonProps {
 export const ExportButton = ({ nodes, conversationData }: ExportButtonProps) => {
   const [showModal, setShowModal] = useState(false);
 
-  const handleExport = (format: 'markdown' | 'xml') => {
-    // Filter out hidden nodes and sort by timestamp
+  const handleExport = (format: 'markdown' | 'xml' | 'obsidian') => {
     const visibleNodes = nodes
       .filter(node => !node.data?.hidden)
       .sort((a, b) => (a.data?.timestamp || 0) - (b.data?.timestamp || 0));
@@ -21,28 +20,52 @@ export const ExportButton = ({ nodes, conversationData }: ExportButtonProps) => 
     let mimeType: string;
 
     if (format === 'markdown') {
-      // Create markdown content
+      // Clean, simple markdown format
       content = `# ${conversationData.title || 'ChatGPT Conversation'}\n\n`;
-      content += `> Created on ${new Date(conversationData.create_time * 1000).toLocaleString()}\n\n`;
+      content += `Created on ${new Date(conversationData.create_time * 1000).toLocaleString()}\n\n---\n\n`;
 
-      // Add each message to the markdown
       visibleNodes.forEach(node => {
         const role = node.data?.role === 'user' ? 'You' : (node.data?.role || 'unknown');
         const messageContent = node.data?.label || '';
         const timestamp = node.data?.timestamp ? new Date(node.data.timestamp * 1000).toLocaleString() : '';
         const model = node.data?.model_slug ? ` (${node.data.model_slug})` : '';
 
-        content += `\n\n<div class="message">\n\n`;
-        content += `**${role}${model}**\n\n`;
-        content += `${messageContent}\n\n`;
+        content += `## ${role}${model}\n\n${messageContent}\n\n`;
         if (timestamp) {
-          content += `> *${timestamp}*\n\n`;
+          content += `*${timestamp}*\n\n`;
         }
-        content += `</div>\n\n`;
-        content += `---\n\n`;
+        content += '---\n\n';
       });
 
       filename = `${conversationData.title || 'chatgpt-conversation'}.md`;
+      mimeType = 'text/markdown';
+    } else if (format === 'obsidian') {
+      // Obsidian-optimized format with callouts
+      content = `# ${conversationData.title || 'ChatGPT Conversation'}\n\n`;
+      content += `>[!info]- Conversation Info\n`;
+      content += `>Created on ${new Date(conversationData.create_time * 1000).toLocaleString()}\n\n`;
+
+      visibleNodes.forEach(node => {
+        const role = node.data?.role === 'user' ? 'You' : (node.data?.role || 'unknown');
+        const messageContent = node.data?.label || '';
+        const timestamp = node.data?.timestamp ? new Date(node.data.timestamp * 1000).toLocaleString() : '';
+        const model = node.data?.model_slug ? ` using ${node.data.model_slug}` : '';
+
+        if (role === 'You') {
+          content += `>[!question] You\n`;
+        } else {
+          content += `>[!note] Assistant${model}\n`;
+        }
+        
+        content += messageContent.split('\n').map(line => `>${line}`).join('\n');
+        content += '\n\n';
+        
+        if (timestamp) {
+          content += `^[${timestamp}]\n\n`;
+        }
+      });
+
+      filename = `${conversationData.title || 'chatgpt-conversation'}_obsidian.md`;
       mimeType = 'text/markdown';
     } else {
       // Create XML content
