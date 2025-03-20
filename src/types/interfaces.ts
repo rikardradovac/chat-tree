@@ -25,13 +25,34 @@ export interface MetaData {
     model_switcher_deny?: string[];
     finish_details?: Record<string, any> | null;
     is_complete?: boolean | null;
-    citations?: string[];
+    citations?: Citation[] | null;
     content_references?: string[];
     gizmo_id?: string | null;
     kwargs?: Record<string, any> | null;
     
 
 }
+export interface Citation {
+    start_ix: number;
+    end_ix: number;
+    citation_format_type: string;
+    metadata: {
+        type: string;
+        title: string;
+        url: string;
+        text: string;
+        pub_date: string | null;
+        extra: {
+            cited_message_idx: number;
+            search_result_idx: number | null;
+            evidence_text: string;
+            start_line_num: number;
+            end_line_num: number;
+        };
+        og_tags: any | null;
+    };
+}
+
 
 export interface Message {
     id: string;
