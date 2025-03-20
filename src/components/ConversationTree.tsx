@@ -7,6 +7,7 @@ import { createContextMenuHandler, checkNodes } from '../utils/conversationTreeH
 import { createNodesInOrder } from '../utils/nodeCreation';
 import { calculateSteps } from '../utils/nodeNavigation';
 import { RefreshButton } from './RefreshButton';
+import { ExportButton } from './ExportButton';
 import { CustomNode } from "./CustomNode";
 import '@xyflow/react/dist/style.css';
 
@@ -117,6 +118,7 @@ const ConversationTree = () => {
   return (
     <div className="w-full h-full" style={{ height: '100%', width: '100%' }}>
       <RefreshButton onClick={handleRefresh} />
+      <ExportButton nodes={nodes} conversationData={conversationData} />
       <ReactFlow
         ref={ref}
         nodes={nodes}
