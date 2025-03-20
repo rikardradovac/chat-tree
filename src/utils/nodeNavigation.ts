@@ -28,7 +28,7 @@ export const calculateSteps = (nodes: Node[], targetId: string) => {
       if (activeChildIndex === -1) {
         for (let i = 0; i < childIndex; i++) {
           stepsToTake.push({
-            nodeId: parent.children[0],
+            nodeId: parent.children[i],
             stepsLeft: -1,
             stepsRight: 1,
           });
@@ -38,13 +38,26 @@ export const calculateSteps = (nodes: Node[], targetId: string) => {
         const moveRight = childIndex > activeChildIndex;
         const steps = Math.abs(activeChildIndex - childIndex);
 
+
+        let tempStepsToTake = [];
         for (let i = 0; i < steps; i++) {
-          stepsToTake.push({
-            nodeId: parent.children[activeChildIndex],
+
+          let tempActiveChildIndex = activeChildIndex;
+          if (moveRight) {
+            tempActiveChildIndex = activeChildIndex + i;
+          } else {
+            tempActiveChildIndex = activeChildIndex - i;
+          }
+          
+          tempStepsToTake.push({
+            nodeId: parent.children[tempActiveChildIndex],
             stepsLeft: moveRight ? -1 : 1,
             stepsRight: moveRight ? 1 : -1,
           });
         }
+
+        // these steps are actually in the correct order, but since we are reversing all steps, we need to keep these steps in the correct order
+        stepsToTake.push(...tempStepsToTake.reverse());
       }
     }
     currentNode = parent;

@@ -577,33 +577,40 @@ async function selectBranch(stepsToTake: any[]) {
     await chrome.scripting.executeScript({
       target: { tabId: currentTab.id },
       func: (stepsToTake) => {
-        const waitForDomChange = (element: Element): Promise<void> => {
-          return new Promise((resolve, _reject) => {
-            const maxWaitTime = 10000; // Increased from 5000 to 10000ms
+        // Optimized DOM change detection with shorter timeout
+        const waitForDomChange = (): Promise<void> => {
+          return new Promise((resolve) => {
+            // Much shorter timeout - just enough for the UI to update
+            const maxWaitTime = 500;
+            
             const timeout = setTimeout(() => {
               observer.disconnect();
-              // Silently resolve instead of rejecting to avoid error logs
               resolve();
             }, maxWaitTime);
 
-            const observer = new MutationObserver((_mutations, obs) => {
-              clearTimeout(timeout);
-              obs.disconnect();
-              resolve();
+            const observer = new MutationObserver((mutations) => {
+              // Check if we have meaningful mutations that suggest content change
+              if (mutations.some(m => 
+                  m.type === 'childList' && (m.addedNodes.length > 0 || m.removedNodes.length > 0) ||
+                  (m.type === 'attributes' && ['style', 'class'].includes(m.attributeName || '')))) {
+                clearTimeout(timeout);
+                observer.disconnect();
+                resolve();
+              }
             });
 
-            observer.observe(element, {
+            // Observe the main content area for faster detection
+            const mainContent = document.querySelector('main') || document.body;
+            observer.observe(mainContent, {
               childList: true,
               subtree: true,
               attributes: true,
-              characterData: true
+              attributeFilter: ['style', 'class', 'aria-hidden']
             });
           });
         };
 
-        // Process steps sequentially using async/await
-        let prevId: string | null = null;
-        let buttonDiv: Element | null | undefined = null;
+        // Process all steps as fast as possible
         const processSteps = async () => {
           try {
             for (const step of stepsToTake) {
@@ -611,48 +618,29 @@ async function selectBranch(stepsToTake: any[]) {
                 throw new Error('Step missing nodeId');
               }
 
-              if (prevId !== step.nodeId) {
-                // if the node is different from the previous one, we need to find the new buttonDiv
-                const element = document.querySelector(`[data-message-id="${step.nodeId}"]`);
-                if (!element) {
-                  throw new Error(`Element not found for nodeId: ${step.nodeId}`);
-                }
-                
-                buttonDiv = element.parentElement?.parentElement;
-                if (!buttonDiv) {
-                  throw new Error(`Button container not found for nodeId: ${step.nodeId}`);
-                }
+              // Find the target element
+              const element = document.querySelector(`[data-message-id="${step.nodeId}"]`);
+              if (!element) {
+                throw new Error(`Element not found for nodeId: ${step.nodeId}`);
               }
-
+              
+              const buttonDiv = element.parentElement?.parentElement;
               if (!buttonDiv) {
                 throw new Error(`Button container not found for nodeId: ${step.nodeId}`);
               }
 
-              const buttons = buttonDiv.querySelectorAll("button");
-              if (!buttons || buttons.length < 2) {
-                throw new Error(`Required buttons not found for nodeId: ${step.nodeId}`);
-              }
-
-              // Find the button with the correct aria-label based on direction
-              const buttonIndex = Array.from(buttons).findIndex(button => {
-                const ariaLabel = button.getAttribute('aria-label');
-                return step.stepsLeft > 0 ? 
-                  ariaLabel === "Previous response" :
-                  ariaLabel === "Next response";
-              });
-
-              if (buttonIndex === -1) {
+              // Find the navigation button by aria-label
+              const targetLabel = step.stepsLeft > 0 ? "Previous response" : "Next response";
+              const buttons = Array.from(buttonDiv.querySelectorAll("button"));
+              const button = buttons.find(btn => btn.getAttribute('aria-label') === targetLabel);
+              
+              if (!button) {
                 throw new Error(`Button with required aria-label not found for nodeId: ${step.nodeId}`);
               }
-              buttons[buttonIndex].click();
-              
-              try {
-                prevId = step.nodeId;
-                await waitForDomChange(buttonDiv);
-              } catch (error) {
-                console.error('Error waiting for DOM change:', error);
-                throw error;
-              }
+
+              // Click the button and wait for DOM changes
+              button.click();
+              await waitForDomChange();
             }
           } catch (error) {
             console.error('Error processing steps:', error);
@@ -660,14 +648,9 @@ async function selectBranch(stepsToTake: any[]) {
           }
         };
 
-        processSteps().catch(error => {
-          console.error('Failed to process steps:', error);
-        });
+        return processSteps();
       },
       args: [stepsToTake]
-    }).catch(error => {
-      console.error('Script execution failed:', error);
-      throw error;
     });
 
   } catch (error) {
@@ -725,6 +708,9 @@ chrome.tabs.onUpdated.addListener(async (tabId, _info, tab) => {
     console.error('Error in onUpdated listener:', error);
   }
 });
+
+
+
 
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   const tab = await chrome.tabs.get(activeInfo.tabId);
