@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ReactFlow, addEdge, Connection, MiniMap, Controls, Background, BackgroundVariant, NodeTypes } from '@xyflow/react';
 import { ContextMenu } from './ContextMenu';
 import { LoadingSpinner, ErrorState } from "./LoadingStates";
@@ -9,6 +9,7 @@ import { calculateSteps } from '../utils/nodeNavigation';
 import { RefreshButton } from './RefreshButton';
 import { ExportButton } from './ExportButton';
 import { CustomNode } from "./CustomNode";
+import { SearchBar } from './SearchBar';
 import '@xyflow/react/dist/style.css';
 
 
@@ -34,6 +35,8 @@ const ConversationTree = () => {
     onNodesChange,
     onEdgesChange
   } = useConversationTree();
+
+  const [showSearch, setShowSearch] = useState(false);
 
   // Create nodes and edges when conversation data changes
   useEffect(() => {
@@ -112,6 +115,19 @@ const ConversationTree = () => {
     [setEdges]
   );
 
+  // Add keyboard shortcut for search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowSearch(true);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   if (isLoading) return <LoadingSpinner />;
   if (!conversationData) return <ErrorState />;
 
@@ -152,6 +168,13 @@ const ConversationTree = () => {
           {...menu} 
         />}
       </ReactFlow>
+      {showSearch && (
+        <SearchBar
+          nodes={nodes}
+          onNodeClick={handleNodeClick}
+          onClose={() => setShowSearch(false)}
+        />
+      )}
     </div>
   );
 };
