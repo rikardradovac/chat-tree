@@ -5,6 +5,7 @@ interface SearchBarProps {
   nodes: Node[];
   onNodeClick: (messageId: string) => any[];
   onClose: () => void;
+  onRefresh: () => void;
 }
 
 interface SearchResult {
@@ -14,7 +15,7 @@ interface SearchResult {
   preview: string;
 }
 
-export const SearchBar = ({ nodes, onNodeClick, onClose }: SearchBarProps) => {
+export const SearchBar = ({ nodes, onNodeClick, onClose, onRefresh }: SearchBarProps) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -38,7 +39,21 @@ export const SearchBar = ({ nodes, onNodeClick, onClose }: SearchBarProps) => {
         e.preventDefault();
         const selectedResult = results[selectedIndex];
         if (selectedResult) {
-          onNodeClick(selectedResult.nodeId);
+          const steps = onNodeClick(selectedResult.nodeId);
+          if (steps) {
+            chrome.runtime.sendMessage({ 
+              action: "executeSteps", 
+              steps: steps,
+              requireCompletion: true
+            }).then(() => {
+              chrome.runtime.sendMessage({ 
+                action: "goToTarget", 
+                targetId: selectedResult.nodeId 
+              }).then(() => {
+                onRefresh();
+              });
+            });
+          }
           onClose();
         }
       }
@@ -46,7 +61,7 @@ export const SearchBar = ({ nodes, onNodeClick, onClose }: SearchBarProps) => {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [results, selectedIndex, onNodeClick, onClose]);
+  }, [results, selectedIndex, onNodeClick, onClose, onRefresh]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -88,10 +103,29 @@ export const SearchBar = ({ nodes, onNodeClick, onClose }: SearchBarProps) => {
     setSelectedIndex(0);
   }, [query, nodes]);
 
+  const handleResultClick = (result: SearchResult) => {
+    const steps = onNodeClick(result.nodeId);
+    if (steps) {
+      chrome.runtime.sendMessage({ 
+        action: "executeSteps", 
+        steps: steps,
+        requireCompletion: true
+      }).then(() => {
+        chrome.runtime.sendMessage({ 
+          action: "goToTarget", 
+          targetId: result.nodeId 
+        }).then(() => {
+          onRefresh();
+        });
+      });
+    }
+    onClose();
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center pt-20 z-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4">
-        <div className="p-4 border-b">
+        <div className="p-4">
           <div className="flex items-center space-x-2">
             <input
               ref={inputRef}
@@ -108,37 +142,37 @@ export const SearchBar = ({ nodes, onNodeClick, onClose }: SearchBarProps) => {
         </div>
         
         {results.length > 0 ? (
-          <div className="max-h-96 overflow-y-auto">
-            {results.map((result, index) => (
-              <button
-                key={result.nodeId}
-                onClick={() => {
-                  onNodeClick(result.nodeId);
-                  onClose();
-                }}
-                className={`w-full px-4 py-3 text-left hover:bg-gray-50 focus:outline-none ${
-                  index === selectedIndex ? 'bg-gray-50' : ''
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm font-medium text-gray-900">
-                      {result.node.data?.role === 'user' ? '👤' : '🤖'}
-                    </span>
-                    <span className="text-sm text-gray-500">
-                      {new Date((result.node.data?.timestamp || 0) * 1000).toLocaleString()}
+          <>
+            <div className="border-t border-gray-200" />
+            <div className="max-h-96 overflow-y-auto">
+              {results.map((result, index) => (
+                <button
+                  key={result.nodeId}
+                  onClick={() => handleResultClick(result)}
+                  className={`w-full px-4 py-3 text-left hover:bg-gray-50 focus:outline-none ${
+                    index === selectedIndex ? 'bg-gray-50' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-medium text-gray-900">
+                        {result.node.data?.role === 'user' ? 'You' : 'Assistant'}
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        {new Date((result.node.data?.timestamp || 0) * 1000).toLocaleString()}
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-500">
+                      {result.matches} match{result.matches !== 1 ? 'es' : ''}
                     </span>
                   </div>
-                  <span className="text-xs text-gray-500">
-                    {result.matches} match{result.matches !== 1 ? 'es' : ''}
-                  </span>
-                </div>
-                <div className="mt-1 text-sm text-gray-700 line-clamp-2">
-                  {result.preview}
-                </div>
-              </button>
-            ))}
-          </div>
+                  <div className="mt-1 text-sm text-gray-700 line-clamp-2">
+                    {result.preview}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
         ) : query ? (
           <div className="px-4 py-8 text-center text-gray-500">
             No results found

@@ -173,6 +173,7 @@ const ConversationTree = () => {
           nodes={nodes}
           onNodeClick={handleNodeClick}
           onClose={() => setShowSearch(false)}
+          onRefresh={updateNodesVisibility}
         />
       )}
     </div>
