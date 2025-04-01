@@ -191,15 +191,22 @@ async function triggerNativeArticleEvents() {
 
       function processArticle(article: Element) {
         if (!triggeredElements.has(article)) { //only if not already triggered
-          // Trigger events on the article itself.
-          triggerNativeEvents(article);
-
-          // Trigger events on each direct child of the article.
-          Array.from(article.children).forEach(child => {
-            triggerNativeEvents(child);
-          });
+          // Process recursively up to 5 levels deep
+          processElementRecursively(article, 0);
           triggeredElements.add(article); //remember we triggered.
         }
+      }
+
+      function processElementRecursively(element: Element, depth: number) {
+        if (depth > 5) return; // Stop at depth 5
+        
+        // Trigger events on the current element
+        triggerNativeEvents(element);
+
+        // Process all children recursively
+        Array.from(element.children).forEach(child => {
+          processElementRecursively(child, depth + 1);
+        });
       }
 
       function findAndTriggerEvents() {
@@ -574,6 +581,8 @@ async function selectBranch(stepsToTake: any[]) {
       throw new Error('Current tab has no ID');
     }
 
+    console.log('selectBranch', stepsToTake);
+
     await chrome.scripting.executeScript({
       target: { tabId: currentTab.id },
       func: (stepsToTake) => {
@@ -620,26 +629,15 @@ async function selectBranch(stepsToTake: any[]) {
         // Optimized DOM change detection with shorter timeout
         const waitForDomChange = (): Promise<void> => {
           return new Promise((resolve) => {
-            // Much shorter timeout - just enough for the UI to update
-            const maxWaitTime = 500;
-            
-            const timeout = setTimeout(() => {
-              observer.disconnect();
-              resolve();
-            }, maxWaitTime);
-
             const observer = new MutationObserver((mutations) => {
-              // Check if we have meaningful mutations that suggest content change
               if (mutations.some(m => 
                   m.type === 'childList' && (m.addedNodes.length > 0 || m.removedNodes.length > 0) ||
                   (m.type === 'attributes' && ['style', 'class'].includes(m.attributeName || '')))) {
-                clearTimeout(timeout);
                 observer.disconnect();
                 resolve();
               }
             });
 
-            // Observe the main content area for faster detection
             const mainContent = document.querySelector('main') || document.body;
             observer.observe(mainContent, {
               childList: true,
