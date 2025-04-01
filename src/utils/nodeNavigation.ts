@@ -1,6 +1,6 @@
-import { Node } from '../types/interfaces';
+import { OpenAINode } from '../types/interfaces';
 
-export const calculateSteps = (nodes: Node[], targetId: string) => {
+export const calculateSteps = (nodes: OpenAINode[], targetId: string) => {
   // Tracks navigation steps needed to reach target node
   const stepsToTake: Array<{
     nodeId: string;

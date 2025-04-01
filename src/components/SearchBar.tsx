@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Node } from '../types/interfaces';
+import { OpenAINode } from '../types/interfaces';
 
 interface SearchBarProps {
-  nodes: Node[];
+  nodes: OpenAINode[];
   onNodeClick: (messageId: string) => any[];
   onClose: () => void;
   onRefresh: () => void;
@@ -10,7 +10,7 @@ interface SearchBarProps {
 
 interface SearchResult {
   nodeId: string;
-  node: Node;
+  node: OpenAINode;
   matches: number;
   preview: string;
 }

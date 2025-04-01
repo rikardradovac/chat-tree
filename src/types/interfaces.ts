@@ -151,28 +151,43 @@ export interface OpenAIMapping {
     [key: string]: OpenAINode;
 }
 
-// The overall conversation data structure for the graph representation
-export interface OpenAIConversationData {
-    title: string;
-    create_time: number; // Unix timestamp
-    update_time: number; // Unix timestamp
-    mapping: OpenAIMapping; // Contains all the nodes
-    moderation_results: any[];
-    current_node: string; // ID of the node currently being viewed/focused
-    plugin_ids: string | null;
-    conversation_id: string; // The main ID for the conversation
-    conversation_template_id: string | null;
-    gizmo_id: string | null;
-    is_archived: boolean;
-    safe_urls: string[];
-    default_model_slug: string;
-    conversation_origin: string | null;
-    voice: string | null;
-    async_status: string | null;
-    gizmo_type?: string | null;
-    is_starred?: boolean | null;
-    disabled_tool_ids?: string[] | any[];
-    [key: string]: any; // Allow for other potential top-level fields
+export type ConversationProvider = 'openai' | 'anthropic';
+
+export interface BaseConversationData {
+  provider: ConversationProvider;
+  title: string;
+  create_time: number;
+  update_time: number;
+}
+
+export interface OpenAIConversationData extends BaseConversationData {
+  provider: 'openai';
+  mapping: OpenAIMapping;
+  moderation_results: any[];
+  current_node: string;
+  plugin_ids: string | null;
+  conversation_id: string;
+  conversation_template_id: string | null;
+  gizmo_id: string | null;
+  is_archived: boolean;
+  safe_urls: string[];
+  default_model_slug: string;
+  conversation_origin: string | null;
+  voice: string | null;
+  async_status: string | null;
+  gizmo_type?: string | null;
+  is_starred?: boolean | null;
+  disabled_tool_ids?: string[] | any[];
+}
+
+export interface AnthropicConversationData extends BaseConversationData {
+  provider: 'anthropic';
+  uuid: string;
+  summary: string;
+  settings: AnthropicSettings;
+  is_starred: boolean;
+  current_leaf_message_uuid: string;
+  chat_messages: AnthropicChatMessage[];
 }
 
 // --- UI-Related Interfaces (renamed for consistency) ---

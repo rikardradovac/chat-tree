@@ -1,4 +1,4 @@
-import { Node, Edge, ConversationData } from '../types/interfaces';
+import { OpenAINode, OpenAIEdge, OpenAIConversationData } from '../types/interfaces';
 import { nodeWidth, nodeHeight } from "../constants/constants";
 import { findFirstContentParent } from './nodeProcessing';
 import dagre from '@dagrejs/dagre';
@@ -6,18 +6,18 @@ import dagre from '@dagrejs/dagre';
 const dagreGraph = new dagre.graphlib.Graph().setGraph({}).setDefaultEdgeLabel(() => ({}));
 
 export const createNodesInOrder = async (
-  conversationData: ConversationData,
+  conversationData: OpenAIConversationData,
   checkNodes: (nodeIds: string[]) => Promise<boolean[]>
 ) => {
   const mapping = conversationData.mapping;
-  const newNodes = new Array<Node>();
-  const newEdges = new Array<Edge>();
+  const newNodes = new Array<OpenAINode>();
+  const newEdges = new Array<OpenAIEdge>();
 
-  const createChildNodes = (node: Node) => {
+  const createChildNodes = (node: OpenAINode) => {
     if (node.children.length === 0) return;
   
     // Recursively finds first descendant with valid content and proper role/recipient
-    const findFirstValidDescendant = (currentNode: Node): Node | null => {
+    const findFirstValidDescendant = (currentNode: OpenAINode): OpenAINode | null => {
       if (currentNode.message?.content?.parts?.[0] &&
           currentNode.message.author.role !== 'system' && 
           currentNode.message.author.role !== 'tool' &&
@@ -35,7 +35,7 @@ export const createNodesInOrder = async (
     // Filter and map children to only valid descendants
     const validChildren = node.children
       .map(childId => findFirstValidDescendant(mapping[childId]))
-      .filter((child): child is Node => child !== null);
+      .filter((child): child is OpenAINode => child !== null);
   
     node.children = validChildren.map(child => child.id);
   
@@ -83,7 +83,7 @@ export const createNodesInOrder = async (
 
   // Find and setup root node
   let rootNode = findFirstContentParent(
-    Object.values(mapping).find(node => !node.parent) as Node,
+    Object.values(mapping).find(node => !node.parent) as OpenAINode,
     mapping
   );
   
@@ -121,7 +121,7 @@ export const createNodesInOrder = async (
   return layoutNodes(newNodes, newEdges);
 };
 
-const layoutNodes = (nodes: Node[], edges: Edge[]) => {
+const layoutNodes = (nodes: OpenAINode[], edges: OpenAIEdge[]) => {
   // Initialize dagre graph with node dimensions
   nodes.forEach((node) => {
     dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { ContextMenuProps } from '../types/interfaces';
+import { OpenAIContextMenuProps } from '../types/interfaces';
 
-export const ContextMenu = (props: ContextMenuProps) => {
+export const ContextMenu = (props: OpenAIContextMenuProps) => {
     // Group state declarations
     const [showInput, setShowInput] = useState(false);
     const [inputValue, setInputValue] = useState(props.role === 'user' ? (props.message || '') : '');

@@ -1,7 +1,7 @@
-import { Node, MenuState } from '../types/interfaces';
+import { OpenAINode, OpenAIMenuState } from '../types/interfaces';
 
-export const createContextMenuHandler = (ref: React.RefObject<HTMLDivElement>, setMenu: (menu: MenuState) => void) => {
-  return (event: React.MouseEvent, node: Node) => {
+export const createContextMenuHandler = (ref: React.RefObject<HTMLDivElement>, setMenu: (menu: OpenAIMenuState) => void) => {
+  return (event: React.MouseEvent, node: OpenAINode) => {
     event.preventDefault();
     
     const pane = ref?.current?.getBoundingClientRect();
