@@ -22,7 +22,12 @@ export const calculateSteps = (nodes: OpenAINode[], targetId: string) => {
     const activeChildIndex = parent.children.findIndex(
       (childId) => nodes.find((node) => node.id === childId)?.data?.hidden === false
     );
-  
+
+    chrome.runtime.sendMessage({
+      action: 'log',
+      message: `childIndex: ${childIndex}, activeChildIndex: ${activeChildIndex} parent.children: ${JSON.stringify(parent.children)}`
+    });
+    
     if (parent.children.length > 1) {
       // If no visible siblings, navigate from first child
       if (activeChildIndex === -1) {
