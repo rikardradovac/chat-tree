@@ -1,3 +1,8 @@
+// Global variables for API endpoints and IDs
+const CHATGPT_ORIGIN = 'https://chatgpt.com';
+const CLAUDE_ORIGIN = 'https://claude.ai';
+let claudeOrgId: string | null = null;
+
 // Function to save headers to chrome.storage
 function saveRequestHeaders(headers: chrome.webRequest.HttpHeader[]) {
   chrome.storage.session.set({ storedRequestHeaders: headers }, () => {
@@ -40,6 +45,30 @@ function captureHeaders() {
     },
     { urls: ["https://chatgpt.com/backend-api/*"] },
     ["requestHeaders"]
+  );
+}
+
+// Function to capture Claude organization IDs
+function captureClaudeOrgId() {
+  const CLAUDE_ORG_PATTERN = "https://claude.ai/api/organizations/*";
+  const CLAUDE_ORG_PREFIX = "https://claude.ai/api/organizations/";
+
+  chrome.webRequest.onBeforeRequest.addListener(
+    (details) => {
+      if (details.url.startsWith(CLAUDE_ORG_PREFIX)) {
+        const orgId = details.url.substring(CLAUDE_ORG_PREFIX.length).split('/')[0];
+        if (orgId) {
+          console.log('🎯 Claude Organization ID:', orgId);
+          claudeOrgId = orgId;
+          // Store the org ID in chrome.storage for potential future use
+          chrome.storage.session.set({ claudeOrgId: orgId });
+        }
+      }
+    },
+    { 
+      urls: [CLAUDE_ORG_PATTERN],
+      types: ["xmlhttprequest"] as chrome.webRequest.ResourceType[]
+    }
   );
 }
 
@@ -128,6 +157,11 @@ chrome.runtime.onMessage.addListener(
     } else if (request.action === "triggerNativeEvents") {
       triggerNativeArticleEvents();
       sendResponse({ success: true });
+      return true;
+    } else if (request.action === "getClaudeOrgId") {
+      chrome.storage.session.get(['claudeOrgId'], (result) => {
+        sendResponse({ orgId: result.claudeOrgId || null });
+      });
       return true;
     }
     return false; // For non-async handlers
@@ -288,22 +322,7 @@ async function triggerNativeArticleEvents() {
 
 // fetch the conversation history
 async function fetchConversationHistory() {
-  let headers = null;
-  for (let i = 0; i < 3; i++) {
-    headers = await loadRequestHeaders();
-    if (headers?.some(h => h.name.toLowerCase() === 'authorization')) {
-      break;
-    }
-    await new Promise(resolve => setTimeout(resolve, 500));
-  }
-
-  if (!headers?.some(h => h.name.toLowerCase() === 'authorization')) {
-    console.error('No authorization header available');
-    throw new Error('Authorization header not found');
-  }
-
   try {
-    // Use chrome.tabs.query instead of getCurrent
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     const currentTab = tabs[0];
     
@@ -315,25 +334,64 @@ async function fetchConversationHistory() {
     const url = new URL(currentTab.url);
     const conversationId = url.pathname.split('/').pop();
 
-    const headersList = new Headers();
-    headers.forEach(header => {
-      headersList.append(header.name, header.value || '');
-    });
+    // Determine if we're on Claude or ChatGPT
+    if (url.origin === CLAUDE_ORIGIN && claudeOrgId) {
+      // Claude API endpoint - no need for headers
+      const response = await fetch(
+        `${CLAUDE_ORIGIN}/api/organizations/${claudeOrgId}/chat_conversations/${conversationId}?tree=True&rendering_mode=messages&render_all_tools=true`,
+        {
+          method: 'GET',
+          credentials: 'include' // This will include cookies
+        }
+      );
+      
+      const data = await response.json();
+      if (!data) {
+        throw new Error('No data received from Claude API');
+      }
+      
+      // Trigger native events after fetching conversation history
+      await triggerNativeArticleEvents();
+      
+      return data;
+    } else if (url.origin === CHATGPT_ORIGIN) {
+      // ChatGPT API endpoint - needs headers
+      let headers = null;
+      for (let i = 0; i < 3; i++) {
+        headers = await loadRequestHeaders();
+        if (headers?.some(h => h.name.toLowerCase() === 'authorization')) {
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
 
-    const response = await fetch(`https://chatgpt.com/backend-api/conversation/${conversationId}`, {
-      method: 'GET',
-      headers: headersList,
-    });
-    
-    const data = await response.json();
-    if (!data) {
-      throw new Error('No data received');
+      if (!headers?.some(h => h.name.toLowerCase() === 'authorization')) {
+        console.error('No authorization header available');
+        throw new Error('Authorization header not found');
+      }
+
+      const headersList = new Headers();
+      headers.forEach(header => {
+        headersList.append(header.name, header.value || '');
+      });
+
+      const response = await fetch(`https://chatgpt.com/backend-api/conversation/${conversationId}`, {
+        method: 'GET',
+        headers: headersList,
+      });
+      
+      const data = await response.json();
+      if (!data) {
+        throw new Error('No data received from ChatGPT API');
+      }
+      
+      // Trigger native events after fetching conversation history
+      await triggerNativeArticleEvents();
+      
+      return data;
+    } else {
+      throw new Error('Unsupported chat platform');
     }
-    
-    // Trigger native events after fetching conversation history
-    await triggerNativeArticleEvents();
-    
-    return data;
   } catch (error) {
     console.error('Error in fetchConversationHistory:', error);
     throw error;
@@ -739,8 +797,7 @@ async function goToTarget(targetId: string) {
 }
 
 captureHeaders();
-
-const CHATGPT_ORIGIN = 'https://chatgpt.com';
+captureClaudeOrgId();
 
 chrome.tabs.onUpdated.addListener(async (tabId, _info, tab) => {
   try {
@@ -780,7 +837,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   if (!tab.url) return;
   const url = new URL(tab.url);
   
-  if (url.origin === CHATGPT_ORIGIN) {
+  if (url.origin === CHATGPT_ORIGIN || url.origin === CLAUDE_ORIGIN) {
     await chrome.sidePanel.setOptions({
       tabId: activeInfo.tabId,
       path: 'index.html',
