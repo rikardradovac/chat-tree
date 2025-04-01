@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { OpenAINode } from '../types/interfaces';
+import { ConversationProvider, OpenAINode } from '../types/interfaces';
 
 interface SearchBarProps {
   nodes: OpenAINode[];
   onNodeClick: (messageId: string) => any[];
   onClose: () => void;
   onRefresh: () => void;
+  provider: ConversationProvider;
 }
 
 interface SearchResult {
@@ -15,7 +16,7 @@ interface SearchResult {
   preview: string;
 }
 
-export const SearchBar = ({ nodes, onNodeClick, onClose, onRefresh }: SearchBarProps) => {
+export const SearchBar = ({ nodes, onNodeClick, onClose, onRefresh, provider }: SearchBarProps) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -42,7 +43,7 @@ export const SearchBar = ({ nodes, onNodeClick, onClose, onRefresh }: SearchBarP
           const steps = onNodeClick(selectedResult.nodeId);
           if (steps) {
             chrome.runtime.sendMessage({ 
-              action: "executeSteps", 
+              action: provider === 'openai' ? "executeSteps" : "executeStepsClaude", 
               steps: steps,
               requireCompletion: true
             }).then(() => {

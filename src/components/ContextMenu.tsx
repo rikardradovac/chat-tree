@@ -94,9 +94,11 @@ export const ContextMenu = (props: OpenAIContextMenuProps) => {
         const steps = props.onNodeClick(props.messageId);
         if (!steps) return;
 
+        const action = props.provider === 'openai' ? 'executeSteps' : 'executeStepsClaude';
+
         try {
             const execResponse = await chrome.runtime.sendMessage({ 
-                action: "executeSteps", 
+                action: action, 
                 steps: steps,
                 requireCompletion: true
             });

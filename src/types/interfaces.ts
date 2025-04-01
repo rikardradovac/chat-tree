@@ -1,6 +1,6 @@
-// --- Interfaces for Anthropic Conversation Structure ---
+// --- Interfaces for Claude Conversation Structure ---
 
-export interface AnthropicContentBlock {
+export interface ClaudeContentBlock {
     start_timestamp: string; // ISO 8601 string timestamp
     stop_timestamp: string;  // ISO 8601 string timestamp
     type: string; // e.g., "text", potentially others like "antArtifact" reference embedded within text
@@ -8,10 +8,10 @@ export interface AnthropicContentBlock {
     citations: any[]; // Based on example, structure unknown, assuming array
 }
 
-export interface AnthropicChatMessage {
+export interface ClaudeChatMessage {
     uuid: string; // Message ID
     text: string; // Often empty, possibly a summary or alternative representation
-    content: AnthropicContentBlock[]; // Array of content blocks for the message
+    content: ClaudeContentBlock[]; // Array of content blocks for the message
     sender: "human" | "assistant"; // Role of the message sender
     index: number; // Sequential index of the message
     created_at: string; // ISO 8601 string timestamp
@@ -25,22 +25,22 @@ export interface AnthropicChatMessage {
     parent_message_uuid: string; // UUID of the parent message
 }
 
-export interface AnthropicSettings {
+export interface ClaudeSettings {
     preview_feature_uses_artifacts?: boolean; // Example specific setting
     // Add other potential settings here if known
     [key: string]: any; // Allow for other unknown settings
 }
 
-export interface AnthropicConversation {
+export interface ClaudeConversation {
     uuid: string; // Conversation ID
     name: string; // Conversation title
     summary: string; // Conversation summary (often empty)
     created_at: string; // ISO 8601 string timestamp
     updated_at: string; // ISO 8601 string timestamp
-    settings: AnthropicSettings;
+    settings: ClaudeSettings;
     is_starred: boolean;
     current_leaf_message_uuid: string; // UUID of the latest message in the primary thread view
-    chat_messages: AnthropicChatMessage[]; // The list of messages in the conversation
+    chat_messages: ClaudeChatMessage[]; // The list of messages in the conversation
 }
 
 // --- Interfaces for OpenAI/ChatGPT-like Conversation Graph Structure ---
@@ -174,6 +174,7 @@ export type OpenAIMenuState = {
 } | null;
 
 export interface OpenAIContextMenuProps {
+    provider: ConversationProvider;
     messageId: string;
     message: string; // Likely message content preview
     childrenIds: string[];
@@ -189,7 +190,7 @@ export interface OpenAIContextMenuProps {
     refreshNodes: () => void; // Function to refresh nodes
 }
 
-export type ConversationProvider = 'openai' | 'anthropic';
+export type ConversationProvider = 'openai' | 'claude';
 
 // Common interfaces for both providers
 export interface BaseNode {
@@ -223,13 +224,36 @@ export interface OpenAINode extends BaseNode {
     message: OpenAIMessage | null;
 }
 
-// New AnthropicNode interface
-export interface AnthropicNode extends BaseNode {
-    message: AnthropicChatMessage | null;
+// New ClaudeNode interface
+export interface ClaudeNode extends BaseNode {
+    message: ClaudeChatMessage | null;
+    data: ClaudeNodeData;
 }
 
 // Update OpenAIEdge to extend BaseEdge
 export interface OpenAIEdge extends BaseEdge {}
 
-// New AnthropicEdge interface
-export interface AnthropicEdge extends BaseEdge {}
+// New ClaudeEdge interface
+export interface ClaudeEdge extends BaseEdge {}
+
+export interface ClaudeNodeData {
+  label: string;  // Required by BaseNode
+  text: string;
+  role: string;
+  hidden?: boolean;
+  timestamp?: number;
+  id?: string;
+  contentType?: string;
+  model_slug?: string;
+}
+
+export interface ClaudeMenuState {
+  message: string;
+  childrenTexts: string[];
+  role: string;
+  top: number | false;
+  left: number | false;
+  right: number | false;
+  bottom: number | false;
+  hidden?: boolean;
+}

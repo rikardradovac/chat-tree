@@ -1,11 +1,11 @@
 import { useState, useRef } from 'react';
-import { OpenAIConversationData, AnthropicConversation, ConversationProvider} from '../types/interfaces';
+import { OpenAIConversationData, ClaudeConversation, ConversationProvider} from '../types/interfaces';
 import { useNodesState, useEdgesState } from '@xyflow/react';
 
 export function useConversationTree() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [conversationData, setConversationData] = useState<OpenAIConversationData | AnthropicConversation | null>(null);
+  const [conversationData, setConversationData] = useState<OpenAIConversationData | ClaudeConversation | null>(null);
   const [provider, setProvider] = useState<ConversationProvider>('openai');
   const [isLoading, setIsLoading] = useState(true);
   const [menu, setMenu] = useState<any>(null);

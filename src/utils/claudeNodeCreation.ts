@@ -1,23 +1,22 @@
-import { AnthropicNode, AnthropicEdge, AnthropicConversation } from '../types/interfaces';
+import { ClaudeNode, ClaudeEdge, ClaudeConversation } from '../types/interfaces';
 import { nodeWidth, nodeHeight } from "../constants/constants";
 import dagre from '@dagrejs/dagre';
 
 const dagreGraph = new dagre.graphlib.Graph().setGraph({}).setDefaultEdgeLabel(() => ({}));
 
-export const createAnthropicNodesInOrder = async (
-  conversationData: AnthropicConversation,
-  checkNodes: (nodeIds: string[]) => Promise<boolean[]>
+export const createClaudeNodesInOrder = async (
+  conversationData: ClaudeConversation,
+  checkNodes: (nodeTexts: string[]) => Promise<boolean[]>
 ) => {
+  chrome.runtime.sendMessage({ action: "log", message: "Starting Claude node creation" });
   const messages = conversationData.chat_messages;
-  const newNodes = new Array<AnthropicNode>();
-  const newEdges = new Array<AnthropicEdge>();
-
-  // Create a map of messages for easier lookup
-  // const messageMap = new Map(messages.map(msg => [msg.uuid, msg]));
+  const newNodes = new Array<ClaudeNode>();
+  const newEdges = new Array<ClaudeEdge>();
 
   // Create nodes for each message
   messages.forEach((message, _index: number) => {
-    const node: AnthropicNode = {
+    chrome.runtime.sendMessage({ action: "log", message: `Creating node for message ${message.uuid}` });
+    const node: ClaudeNode = {
       id: message.uuid,
       type: 'custom',
       parent: message.parent_message_uuid || null,
@@ -26,6 +25,7 @@ export const createAnthropicNodesInOrder = async (
       message: message,
       data: {
         label: message.content[0]?.text || 'No content available',
+        text: message.content[0]?.text || 'No content available',
         role: message.sender,
         timestamp: new Date(message.created_at).getTime(),
         id: message.uuid,
@@ -39,6 +39,7 @@ export const createAnthropicNodesInOrder = async (
       const parentNode = newNodes.find(n => n.id === message.parent_message_uuid);
       if (parentNode) {
         parentNode.children.push(message.uuid);
+        chrome.runtime.sendMessage({ action: "log", message: `Added child relationship: ${message.parent_message_uuid} -> ${message.uuid}` });
       }
     }
 
@@ -48,6 +49,7 @@ export const createAnthropicNodesInOrder = async (
   // Create edges between parent and child nodes
   newNodes.forEach(node => {
     if (node.parent) {
+      chrome.runtime.sendMessage({ action: "log", message: `Creating edge: ${node.parent} -> ${node.id}` });
       newEdges.push({
         id: `${node.parent}-${node.id}`,
         source: node.parent,
@@ -60,17 +62,21 @@ export const createAnthropicNodesInOrder = async (
   });
 
   // Update visibility state of nodes
-  const existingNodes = await checkNodes(newNodes.map(node => node.id));
+  chrome.runtime.sendMessage({ action: "log", message: "Checking node visibility states" });
+  const existingNodes = await checkNodes(newNodes.map(node => node.data.text));
   existingNodes.forEach((hidden: boolean, index: number) => {
     if (newNodes[index]) {
       newNodes[index]!.data!.hidden = hidden;
     }
   });
 
+  chrome.runtime.sendMessage({ action: "log", message: "Starting node layout" });
   return layoutNodes(newNodes, newEdges);
 };
 
-const layoutNodes = (nodes: AnthropicNode[], edges: AnthropicEdge[]) => {
+const layoutNodes = (nodes: ClaudeNode[], edges: ClaudeEdge[]) => {
+  chrome.runtime.sendMessage({ action: "log", message: `Layouting ${nodes.length} nodes and ${edges.length} edges` });
+  
   // Initialize dagre graph with node dimensions
   nodes.forEach((node) => {
     dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
@@ -97,17 +103,6 @@ const layoutNodes = (nodes: AnthropicNode[], edges: AnthropicEdge[]) => {
     };
   });
 
+  chrome.runtime.sendMessage({ action: "log", message: "Node layout completed" });
   return { nodes: nodesWithPositions, edges };
 };
-
-export const calculateAnthropicSteps = (nodes: AnthropicNode[], targetId: string): string[] => {
-  const steps: string[] = [];
-  let currentNode = nodes.find(node => node.id === targetId);
-  
-  while (currentNode) {
-    steps.unshift(currentNode.id);
-    currentNode = nodes.find(node => node.id === currentNode?.parent);
-  }
-  
-  return steps;
-}; 

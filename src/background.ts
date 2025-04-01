@@ -94,14 +94,55 @@ chrome.runtime.onMessage.addListener(
       return true;
     }
     else if (request.action === "checkNodes") {
-      checkNodesExistence(request.nodeIds)
-        .then(existingNodes => {
-          sendResponse({ success: true, existingNodes });
-        })
-        .catch(error => {
-          sendResponse({ success: false, error: error.message });
-        });
-      return true; // Important for async response
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (!tabs[0]?.url) {
+          sendResponse({ success: false, error: "Could not get current tab URL" });
+          return;
+        }
+        
+        const url = new URL(tabs[0].url);
+        if (url.origin === CHATGPT_ORIGIN) {
+          checkNodesExistence(request.nodeIds)
+            .then(existingNodes => {
+              sendResponse({ success: true, existingNodes });
+            })
+            .catch(error => {
+              sendResponse({ success: false, error: error.message });
+            });
+        } else {
+          sendResponse({ success: false, error: "Invalid origin for OpenAI check" });
+        }
+      });
+      return true;
+    }
+    else if (request.action === "checkNodesClaude") {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (!tabs[0]?.url) {
+          sendResponse({ success: false, error: "Could not get current tab URL" });
+          return;
+        }
+        
+        const url = new URL(tabs[0].url);
+        if (url.origin === CLAUDE_ORIGIN) {
+          console.log('Received request for Claude:', request);
+          console.log('nodeTexts:', request.nodeTexts);
+          if (!request.nodeTexts || !Array.isArray(request.nodeTexts)) {
+            console.error('Invalid nodeTexts:', request.nodeTexts);
+            sendResponse({ success: false, error: "Invalid nodeTexts provided" });
+            return;
+          }
+          checkNodesExistenceClaude(request.nodeTexts)
+            .then(existingNodes => {
+              sendResponse({ success: true, existingNodes });
+            })
+            .catch(error => {
+              sendResponse({ success: false, error: error.message });
+            });
+        } else {
+          sendResponse({ success: false, error: "Invalid origin for Claude check" });
+        }
+      });
+      return true;
     }
     else if (request.action === "editMessage") {
       (async () => {
@@ -136,6 +177,20 @@ chrome.runtime.onMessage.addListener(
       (async () => {
         try {
           await selectBranch(request.steps);
+          sendResponse({ success: true, completed: true });
+        } catch (error: any) {
+          sendResponse({ 
+            success: false, 
+            completed: false, 
+            error: error.message 
+          });
+        }
+      })();
+      return true; // Keep message channel open for async response
+    } else if (request.action === "executeStepsClaude") {
+      (async () => {
+        try {
+          await selectBranchClaude(request.steps);
           sendResponse({ success: true, completed: true });
         } catch (error: any) {
           sendResponse({ 
@@ -418,6 +473,44 @@ async function checkNodesExistence(nodeIds: string[]) {
   }
 }
 
+async function checkNodesExistenceClaude(nodeTexts: string[] | undefined) {
+  if (!nodeTexts || !Array.isArray(nodeTexts)) {
+    throw new Error('Invalid nodeTexts provided');
+  }
+
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const currentTab = tabs[0];
+
+  if (!currentTab?.id) {
+    throw new Error('No active tab found');
+  }
+
+  // Ensure nodeTexts is serializable by converting to plain strings
+  const serializableTexts = nodeTexts.map(text => String(text));
+
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: currentTab.id },
+    func: (texts: string[]) => {
+      return texts.map(expectedText => {
+        const normalizedExpectedText = expectedText.trim().replace(/\s+/g, ' ');
+        const containers = document.querySelectorAll('.grid-cols-1');
+        
+        for (const container of containers) {
+          const containerText = container.textContent?.trim().replace(/\s+/g, ' ');
+          if (containerText === normalizedExpectedText) {
+            return false;
+          }
+        }
+        return true;
+      });
+    },
+    args: [serializableTexts]
+  });
+
+  console.log('checkNodesExistenceClaude results:', results[0].result);
+  return results[0].result;
+}
+
 async function editMessage(messageId: string, message: string) {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const currentTab = tabs[0];
@@ -518,7 +611,6 @@ async function editMessage(messageId: string, message: string) {
     args: [messageId, message]
   });
 }
-
 
 async function respondToMessage(childrenIds: string[], message: string) {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -622,6 +714,18 @@ async function respondToMessage(childrenIds: string[], message: string) {
     },
     args: [childrenIds, message]
   });
+}
+
+
+async function selectBranchClaude(stepsToTake: any[]) {
+  try {
+    if (!Array.isArray(stepsToTake)) {
+      throw new Error('stepsToTake must be an array');
+    }
+  } catch (error) {
+    console.error('selectBranchClaude failed:', error);
+    throw error;
+  }
 }
 
 async function selectBranch(stepsToTake: any[]) {
@@ -829,9 +933,6 @@ chrome.tabs.onUpdated.addListener(async (tabId, _info, tab) => {
   }
 });
 
-
-
-
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   const tab = await chrome.tabs.get(activeInfo.tabId);
   if (!tab.url) return;
@@ -856,7 +957,6 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
     });
   }
 });
-
 
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
