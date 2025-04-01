@@ -117,23 +117,7 @@ export interface OpenAIMessage {
 }
 
 // Represents a node in the conversation graph/tree
-export interface OpenAINode {
-    position: { x: number; y: number }; // For visualization
-    id: string; // Unique ID for this node (often matches message ID)
-    data?: { // Data used for rendering the node
-        label: string; // Text content preview
-        role?: string; // Author role
-        timestamp?: number; // Create time
-        id?: string; // Message ID (redundant with node id sometimes)
-        hidden?: boolean;
-        contentType?: string;
-        model_slug?: string;
-    };
-    message: OpenAIMessage | null; // The actual message data associated with this node
-    parent: string | null; // ID of the parent node in the graph
-    children: string[]; // IDs of child nodes (branches)
-    type?: string; // Node type for visualization library (e.g., 'custom')
-}
+
 
 // Represents an edge connecting nodes in the visualization
 export interface OpenAIEdge {
@@ -151,43 +135,28 @@ export interface OpenAIMapping {
     [key: string]: OpenAINode;
 }
 
-export type ConversationProvider = 'openai' | 'anthropic';
-
-export interface BaseConversationData {
-  provider: ConversationProvider;
-  title: string;
-  create_time: number;
-  update_time: number;
-}
-
-export interface OpenAIConversationData extends BaseConversationData {
-  provider: 'openai';
-  mapping: OpenAIMapping;
-  moderation_results: any[];
-  current_node: string;
-  plugin_ids: string | null;
-  conversation_id: string;
-  conversation_template_id: string | null;
-  gizmo_id: string | null;
-  is_archived: boolean;
-  safe_urls: string[];
-  default_model_slug: string;
-  conversation_origin: string | null;
-  voice: string | null;
-  async_status: string | null;
-  gizmo_type?: string | null;
-  is_starred?: boolean | null;
-  disabled_tool_ids?: string[] | any[];
-}
-
-export interface AnthropicConversationData extends BaseConversationData {
-  provider: 'anthropic';
-  uuid: string;
-  summary: string;
-  settings: AnthropicSettings;
-  is_starred: boolean;
-  current_leaf_message_uuid: string;
-  chat_messages: AnthropicChatMessage[];
+// The overall conversation data structure for the graph representation
+export interface OpenAIConversationData {
+    title: string;
+    create_time: number; // Unix timestamp
+    update_time: number; // Unix timestamp
+    mapping: OpenAIMapping; // Contains all the nodes
+    moderation_results: any[];
+    current_node: string; // ID of the node currently being viewed/focused
+    plugin_ids: string | null;
+    conversation_id: string; // The main ID for the conversation
+    conversation_template_id: string | null;
+    gizmo_id: string | null;
+    is_archived: boolean;
+    safe_urls: string[];
+    default_model_slug: string;
+    conversation_origin: string | null;
+    voice: string | null;
+    async_status: string | null;
+    gizmo_type?: string | null;
+    is_starred?: boolean | null;
+    disabled_tool_ids?: string[] | any[];
+    [key: string]: any; // Allow for other potential top-level fields
 }
 
 // --- UI-Related Interfaces (renamed for consistency) ---
@@ -219,3 +188,48 @@ export interface OpenAIContextMenuProps {
     onRefresh: () => void; // Function to refresh something
     refreshNodes: () => void; // Function to refresh nodes
 }
+
+export type ConversationProvider = 'openai' | 'anthropic';
+
+// Common interfaces for both providers
+export interface BaseNode {
+    position: { x: number; y: number };
+    id: string;
+    data?: {
+        label: string;
+        role?: string;
+        timestamp?: number;
+        id?: string;
+        hidden?: boolean;
+        contentType?: string;
+        model_slug?: string;
+    };
+    parent: string | null;
+    children: string[];
+    type?: string;
+}
+
+export interface BaseEdge {
+    id: string;
+    source: string;
+    target: string;
+    type: string;
+    animated?: boolean;
+    style?: Record<string, any>;
+}
+
+// Update OpenAINode to extend BaseNode
+export interface OpenAINode extends BaseNode {
+    message: OpenAIMessage | null;
+}
+
+// New AnthropicNode interface
+export interface AnthropicNode extends BaseNode {
+    message: AnthropicChatMessage | null;
+}
+
+// Update OpenAIEdge to extend BaseEdge
+export interface OpenAIEdge extends BaseEdge {}
+
+// New AnthropicEdge interface
+export interface AnthropicEdge extends BaseEdge {}

@@ -5,19 +5,20 @@ import { LoadingSpinner, ErrorState } from "./LoadingStates";
 import { useConversationTree } from '../hooks/useConversationTree';
 import { createContextMenuHandler, checkNodes } from '../utils/conversationTreeHandlers';
 import { createNodesInOrder } from '../utils/nodeCreation';
+import { createAnthropicNodesInOrder } from '../utils/anthropicNodeCreation';
 import { calculateSteps } from '../utils/nodeNavigation';
+import { calculateAnthropicSteps } from '../utils/anthropicNodeCreation';
 import { ExportButton } from './ExportButton';
 import { CustomNode } from "./CustomNode";
 import { SearchBar } from './SearchBar';
+import { OpenAIConversationData, AnthropicConversation } from '../types/interfaces';
 import '@xyflow/react/dist/style.css';
 
-
 const nodeTypes: NodeTypes = {
-    custom: CustomNode,
-  };
+  custom: CustomNode,
+};
 
 const ConversationTree = () => {
-  // Custom hook providing state and handlers for the conversation tree
   const {
     nodes,
     setNodes,
@@ -25,6 +26,8 @@ const ConversationTree = () => {
     setEdges,
     conversationData,
     setConversationData,
+    provider,
+    setProvider,
     isLoading,
     setIsLoading,
     menu,
@@ -40,7 +43,11 @@ const ConversationTree = () => {
   // Create nodes and edges when conversation data changes
   useEffect(() => {
     if (conversationData) {
-      createNodesInOrder(conversationData, checkNodes)
+      const createNodes = provider === 'openai' 
+        ? (data: OpenAIConversationData) => createNodesInOrder(data, checkNodes)
+        : (data: AnthropicConversation) => createAnthropicNodesInOrder(data, checkNodes);
+      
+      createNodes(conversationData as any)
         .then(({ nodes: newNodes, edges: newEdges }) => {
           setNodes(newNodes as any);
           setEdges(newEdges as any);
@@ -51,7 +58,7 @@ const ConversationTree = () => {
           console.error("Error creating nodes:", error);
         });
     }
-  }, [conversationData]);
+  }, [conversationData, provider]);
 
   // Add another useEffect to handle initial data fetch
   useEffect(() => {
@@ -64,7 +71,11 @@ const ConversationTree = () => {
     try {
       const response = await chrome.runtime.sendMessage({ action: "fetchConversationHistory" });
       if (response.success) {
+        // Determine the provider based on the response data structure
+        const isAnthropic = 'chat_messages' in response.data;
+        setProvider(isAnthropic ? 'anthropic' : 'openai');
         setConversationData(response.data);
+        
         // Fit view after nodes are rendered
         setTimeout(() => {
           if (reactFlowInstance.current) {
@@ -87,21 +98,22 @@ const ConversationTree = () => {
     const existingNodes = await checkNodes(nodeIds);
     
     setNodes((prevNodes: any) => 
-        prevNodes.map((node: any, index: number) => ({
-            ...node,
-            data: {
-                ...node.data,
-                hidden: existingNodes[index]
-            }
-        }))
+      prevNodes.map((node: any, index: number) => ({
+        ...node,
+        data: {
+          ...node.data,
+          hidden: existingNodes[index]
+        }
+      }))
     );
   }, [nodes]);
 
   // Calculate navigation steps when a node is clicked
   const handleNodeClick = useCallback((messageId: string) => {
     setMenu(null);
-    return calculateSteps(nodes, messageId);
-  }, [nodes]);
+    const calculateStepsFn = provider === 'openai' ? calculateSteps : calculateAnthropicSteps;
+    return calculateStepsFn(nodes, messageId);
+  }, [nodes, provider]);
 
   const onNodeContextMenu = useCallback(
     createContextMenuHandler(ref, setMenu),
@@ -201,6 +213,5 @@ const ConversationTree = () => {
     </div>
   );
 };
-
 
 export default ConversationTree;
