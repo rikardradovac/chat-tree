@@ -577,6 +577,46 @@ async function selectBranch(stepsToTake: any[]) {
     await chrome.scripting.executeScript({
       target: { tabId: currentTab.id },
       func: (stepsToTake) => {
+
+        // Function to trigger native events on a specific element
+        function triggerNativeEvents(element: Element) {
+          if (!element) {
+            console.error("triggerNativeEvents: Element is null or undefined.");
+            return;
+          }
+
+          const eventTypes = [
+              'mouseover', 'mouseenter', 'mousemove', 'mousedown', 'mouseup', 'click',
+              'pointerover', 'pointerenter', 'pointerdown', 'pointerup', 'pointermove', 'pointercancel',
+              'focus', 'focusin'
+          ];
+
+          for (const eventType of eventTypes) {
+            try {
+              const event = new MouseEvent(eventType, {
+                bubbles: true,
+                cancelable: true,
+                view: window,
+              });
+
+              Object.defineProperty(event, 'target', {
+                value: element,
+                enumerable: true,
+                configurable: true
+              });
+
+              Object.defineProperty(event, 'currentTarget', {
+                value: element,
+                enumerable: true,
+                configurable: true
+              });
+
+              element.dispatchEvent(event);
+            } catch (error) {
+              console.error(`Error dispatching ${eventType} event:`, error);
+            }
+          }
+        }
         // Optimized DOM change detection with shorter timeout
         const waitForDomChange = (): Promise<void> => {
           return new Promise((resolve) => {
@@ -623,6 +663,8 @@ async function selectBranch(stepsToTake: any[]) {
               if (!element) {
                 throw new Error(`Element not found for nodeId: ${step.nodeId}`);
               }
+
+              triggerNativeEvents(element);
               
               const buttonDiv = element.parentElement?.parentElement;
               if (!buttonDiv) {
@@ -631,8 +673,31 @@ async function selectBranch(stepsToTake: any[]) {
 
               // Find the navigation button by aria-label
               const targetLabel = step.stepsLeft > 0 ? "Previous response" : "Next response";
-              const buttons = Array.from(buttonDiv.querySelectorAll("button"));
-              const button = buttons.find(btn => btn.getAttribute('aria-label') === targetLabel);
+
+              let button = null;
+              let attempts = 0;
+
+              const maxAttempts = 50; // Prevent infinite loop
+
+
+              while (!button && attempts < maxAttempts) {
+                const buttons = Array.from(buttonDiv.querySelectorAll("button"));
+                button = buttons.find(btn => btn.getAttribute('aria-label') === targetLabel);
+                
+                if (!button) {
+                  // Process element and its children recursively up to 5 levels
+                  function processElementRecursively(element: Element, depth: number) {
+                    if (depth > 5) return;
+                    triggerNativeEvents(element);
+                    Array.from(element.children).forEach(child => {
+                      processElementRecursively(child, depth + 1);
+                    });
+                  }
+                  
+                  processElementRecursively(element, 0);
+                  attempts++;
+                }
+              }
               
               if (!button) {
                 throw new Error(`Button with required aria-label not found for nodeId: ${step.nodeId}`);

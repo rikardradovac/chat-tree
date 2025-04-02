@@ -26,7 +26,7 @@ export const calculateSteps = (nodes: Node[], targetId: string) => {
     if (parent.children.length > 1) {
       // If no visible siblings, navigate from first child
       if (activeChildIndex === -1) {
-        for (let i = 0; i < childIndex; i++) {
+        for (let i = childIndex - 1; i >= 0; i--) {
           stepsToTake.push({
             nodeId: parent.children[i],
             stepsLeft: -1,
