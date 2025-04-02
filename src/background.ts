@@ -900,6 +900,28 @@ async function goToTarget(targetId: string) {
   })
 }
 
+async function goToTargetClaude(targetText: string) {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const currentTab = tabs[0];
+
+  await chrome.scripting.executeScript({
+    target: { tabId: currentTab.id ?? 0 },
+    func: (targetText) => {
+      const normalizedTargetText = targetText.trim().replace(/\s+/g, ' ');
+      const containers = document.querySelectorAll('.grid-cols-1');
+      
+      for (const container of containers) {
+        const containerText = container.textContent?.trim().replace(/\s+/g, ' ');
+        if (containerText === normalizedTargetText) {
+          container.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          break;
+        }
+      }
+    },
+    args: [targetText]
+  })
+}
+
 captureHeaders();
 captureClaudeOrgId();
 
