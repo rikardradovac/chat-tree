@@ -112,7 +112,7 @@ const ConversationTree = () => {
   const updateNodesVisibility = useCallback(async () => {
     if (provider === 'openai') {
       const nodeIds = nodes.map((node: any) => node.id);
-      chrome.runtime.sendMessage({ action: "log", message: "Checking OpenAI nodes with IDs: " + JSON.stringify(nodeIds) });
+      
       const existingNodes = await checkNodes(nodeIds);
       
       setNodes((prevNodes: any) => 
@@ -126,7 +126,7 @@ const ConversationTree = () => {
       );
     } else {
       const nodeTexts = nodes.map((node: any) => node.data.text);
-      chrome.runtime.sendMessage({ action: "log", message: "Checking Claude nodes with texts: " + JSON.stringify(nodeTexts) });
+     
       const existingNodes = await checkNodesClaude(nodeTexts);
       
       setNodes((prevNodes: any) => 

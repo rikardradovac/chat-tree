@@ -4,12 +4,24 @@ export const calculateStepsClaude = (nodes: ClaudeNode[], targetId: string) => {
   // Tracks navigation steps needed to reach target node
   const stepsToTake: Array<{
     nodeText: string;
+    nodeId: string;
     stepsLeft: number;
     stepsRight: number;
   }> = [];
 
   let currentNode = nodes.find((node) => node.id === targetId);
+
+  chrome.runtime.sendMessage({
+    action: 'log',
+    message: `currentNode: ${JSON.stringify(currentNode)}`
+  });
     
+
+  chrome.runtime.sendMessage({
+    action: 'log',
+    message: `nodes: ${JSON.stringify(nodes, null, 2)}`
+  });
+  
   if (!currentNode) return [];
   // Navigate up the tree while nodes are hidden
   while (currentNode?.data?.hidden) {
@@ -35,6 +47,7 @@ export const calculateStepsClaude = (nodes: ClaudeNode[], targetId: string) => {
           if (childNode) {
             stepsToTake.push({
               nodeText: childNode.data.text,
+              nodeId: childNode.id,
               stepsLeft: -1,
               stepsRight: 1,
             });
@@ -58,6 +71,7 @@ export const calculateStepsClaude = (nodes: ClaudeNode[], targetId: string) => {
           if (childNode) {
             tempStepsToTake.push({
               nodeText: childNode.data.text,
+              nodeId: childNode.id,
               stepsLeft: moveRight ? -1 : 1,
               stepsRight: moveRight ? 1 : -1,
             });

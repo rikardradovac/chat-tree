@@ -124,8 +124,8 @@ chrome.runtime.onMessage.addListener(
         
         const url = new URL(tabs[0].url);
         if (url.origin === CLAUDE_ORIGIN) {
-          console.log('Received request for Claude:', request);
-          console.log('nodeTexts:', request.nodeTexts);
+        
+      
           if (!request.nodeTexts || !Array.isArray(request.nodeTexts)) {
             console.error('Invalid nodeTexts:', request.nodeTexts);
             sendResponse({ success: false, error: "Invalid nodeTexts provided" });
@@ -507,7 +507,6 @@ async function checkNodesExistenceClaude(nodeTexts: string[] | undefined) {
     args: [serializableTexts]
   });
 
-  console.log('checkNodesExistenceClaude results:', results[0].result);
   return results[0].result;
 }
 
@@ -722,6 +721,115 @@ async function selectBranchClaude(stepsToTake: any[]) {
     if (!Array.isArray(stepsToTake)) {
       throw new Error('stepsToTake must be an array');
     }
+
+
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tabs || tabs.length === 0) {
+      throw new Error('No active tab found');
+    }
+    const currentTab = tabs[0];
+    if (!currentTab.id) {
+      throw new Error('Current tab has no ID');
+    }
+
+    console.log('selectBranchClaude', stepsToTake);
+
+    await chrome.scripting.executeScript({
+      target: { tabId: currentTab.id },
+      func: (stepsToTake) => {
+        console.log('selectBranchClaude', stepsToTake);
+
+
+        function findButtons(element: Element | null, maxDepth = 5) {
+          if (!element) {
+            return null; // Base case: Element is null, return null.
+          }
+        
+          if (maxDepth <= 0) {
+            return null; // Base case: Reached maximum depth, return null.
+          }
+        
+          // Find all buttons inside the current element
+          const buttons = element.querySelectorAll('button');
+        
+          if (buttons.length > 0) {
+            // If buttons are found, convert NodeList to an array and return it
+            return Array.from(buttons);
+          }
+        
+          // Recursive step: Move up to the parent element
+          return findButtons(element.parentElement, maxDepth - 1);
+        }
+
+        const waitForDomChange = (): Promise<void> => {
+          return new Promise((resolve) => {
+            const observer = new MutationObserver((mutations) => {
+              if (mutations.some(m => 
+                  m.type === 'childList' && (m.addedNodes.length > 0 || m.removedNodes.length > 0) ||
+                  (m.type === 'attributes' && ['style', 'class'].includes(m.attributeName || '')))) {
+                observer.disconnect();
+                resolve();
+              }
+            });
+
+            const mainContent = document.querySelector('main') || document.body;
+            observer.observe(mainContent, {
+              childList: true,
+              subtree: true,
+              attributes: true,
+              attributeFilter: ['style', 'class', 'aria-hidden']
+            });
+          });
+        };
+
+
+        // Process all steps as fast as possible
+        const processSteps = async () => {
+          try {
+            for (const step of stepsToTake) {
+              if (!step.nodeId) {
+                throw new Error('Step missing nodeId');
+                
+              }
+
+              // Find the target element
+              const normalizedTargetText = step.nodeText.trim().replace(/\s+/g, ' ');
+              const containers = document.querySelectorAll('.grid-cols-1');
+              
+              let element = null;
+              for (const container of containers) {
+                const containerText = container.textContent?.trim().replace(/\s+/g, ' ');
+                if (containerText === normalizedTargetText) {
+                  element = container; // Return the element that matches
+                }
+              }
+
+              
+              //0 is edit, 1 is previous, 2 is next
+              let buttonIndex = step.stepsLeft > 0 ? 1 : 2;
+
+              const buttons = findButtons(element);
+
+              if (!buttons) {
+                throw new Error(`Button with required aria-label not found for nodeId: ${step.nodeId}`);
+              }
+
+              const button = buttons[buttonIndex];
+
+              // Click the button and wait for DOM changes
+              button.click();
+              await waitForDomChange();
+            }
+          } catch (error) {
+            console.error('Error processing steps:', error);
+            throw error;
+          }
+        };
+
+        return processSteps();
+      },
+      args: [stepsToTake]
+    });
   } catch (error) {
     console.error('selectBranchClaude failed:', error);
     throw error;

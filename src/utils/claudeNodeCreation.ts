@@ -8,18 +8,37 @@ export const createClaudeNodesInOrder = async (
   conversationData: ClaudeConversation,
   checkNodes: (nodeTexts: string[]) => Promise<boolean[]>
 ) => {
-  chrome.runtime.sendMessage({ action: "log", message: "Starting Claude node creation" });
   const messages = conversationData.chat_messages;
   const newNodes = new Array<ClaudeNode>();
   const newEdges = new Array<ClaudeEdge>();
 
+  // Create root node
+  const rootNode: ClaudeNode = {
+    id: 'root',
+    type: 'custom',
+    parent: null,
+    children: [],
+    position: { x: 0, y: 0 },
+    message: null,
+    data: {
+      label: 'Conversation Root',
+      text: 'Conversation Root',
+      role: 'system',
+      timestamp: new Date().getTime(),
+      id: 'root',
+      hidden: true,
+      contentType: 'text'
+    }
+  };
+  newNodes.push(rootNode);
+
   // Create nodes for each message
   messages.forEach((message, _index: number) => {
-    chrome.runtime.sendMessage({ action: "log", message: `Creating node for message ${message.uuid}` });
+    message.parent_message_uuid = message.parent_message_uuid === '00000000-0000-4000-8000-000000000000' ? 'root' : message.parent_message_uuid;
     const node: ClaudeNode = {
       id: message.uuid,
       type: 'custom',
-      parent: message.parent_message_uuid || null,
+      parent: message.parent_message_uuid, // Connect to root if no parent
       children: [],
       position: { x: 0, y: 0 }, // Will be set by dagre layout
       message: message,
@@ -39,17 +58,23 @@ export const createClaudeNodesInOrder = async (
       const parentNode = newNodes.find(n => n.id === message.parent_message_uuid);
       if (parentNode) {
         parentNode.children.push(message.uuid);
-        chrome.runtime.sendMessage({ action: "log", message: `Added child relationship: ${message.parent_message_uuid} -> ${message.uuid}` });
+        
       }
+    } else {
+      // If no parent, connect to root node
+      rootNode.children.push(message.uuid);
+
     }
 
     newNodes.push(node);
   });
 
+
+
   // Create edges between parent and child nodes
   newNodes.forEach(node => {
     if (node.parent) {
-      chrome.runtime.sendMessage({ action: "log", message: `Creating edge: ${node.parent} -> ${node.id}` });
+    
       newEdges.push({
         id: `${node.parent}-${node.id}`,
         source: node.parent,
@@ -63,10 +88,11 @@ export const createClaudeNodesInOrder = async (
 
   // Update visibility state of nodes
   chrome.runtime.sendMessage({ action: "log", message: "Checking node visibility states" });
-  const existingNodes = await checkNodes(newNodes.map(node => node.data.text));
+  const nodesToCheck = newNodes.filter(node => node.id !== 'root'); // Don't check root node
+  const existingNodes = await checkNodes(nodesToCheck.map(node => node.data.text));
   existingNodes.forEach((hidden: boolean, index: number) => {
-    if (newNodes[index]) {
-      newNodes[index]!.data!.hidden = hidden;
+    if (nodesToCheck[index]) {
+      nodesToCheck[index]!.data!.hidden = hidden;
     }
   });
 
