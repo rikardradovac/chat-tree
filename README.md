@@ -1,4 +1,4 @@
-# Non-Linear Chat 🌳💬
+# ChatTree Chat 🌳💬
 
 A browser extension that visualizes ChatGPT and Claude.ai conversations as interactive graphs, allowing you to explore and navigate your AI conversations in a non-linear way.
 
