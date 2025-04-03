@@ -7,13 +7,6 @@ export const ContextMenu = (props: ContextMenuProps) => {
     const [inputValue, setInputValue] = useState(props.role === 'user' ? (props.message || '') : '');
     const menuRef = useRef<HTMLDivElement>(null);
 
-    chrome.runtime.sendMessage({
-        action: "log",
-        message: `
-            Context Menu Props: ${JSON.stringify(props)}
-        `
-    });
-
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -101,12 +94,14 @@ export const ContextMenu = (props: ContextMenuProps) => {
     };
 
     const selectBranch = async () => {
+       
         if (!props.messageId) return;
 
         const steps = props.onNodeClick(props.messageId);
         if (!steps) return;
 
         const action = props.provider === 'openai' ? 'executeSteps' : 'executeStepsClaude';
+
 
         try {
             const execResponse = await chrome.runtime.sendMessage({ 

@@ -249,6 +249,7 @@ export interface ClaudeNodeData {
 }
 
 export interface ClaudeMenuState {
+  messageId: string;
   message: string;
   childrenTexts: string[];
   role: string;

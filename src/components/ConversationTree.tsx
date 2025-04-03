@@ -59,11 +59,9 @@ const ConversationTree = () => {
       chrome.runtime.sendMessage({ action: "log", message: "Starting tree initialization with provider: " + provider });
       const createNodes = provider === 'openai' 
         ? (data: OpenAIConversationData) => {
-            chrome.runtime.sendMessage({ action: "log", message: "Creating OpenAI nodes" });
             return createNodesInOrder(data, checkNodes);
           }
         : (data: ClaudeConversation) => {
-            chrome.runtime.sendMessage({ action: "log", message: "Creating Claude nodes" });
             return createClaudeNodesInOrder(data, checkNodesClaude);
           };
       
@@ -250,7 +248,6 @@ const ConversationTree = () => {
       if (provider === 'openai') {
         createContextMenuHandler(ref, setMenu)(event, node);
       } else {
-        chrome.runtime.sendMessage({ action: "log", message: `Creating Claude context menu for node ${node.id}` });
         createClaudeContextMenuHandler(ref, setMenu, nodes)(event, node);
       }
     },
