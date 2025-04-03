@@ -1,7 +1,7 @@
 {
     "name": "ChatTree",
-    "description": "Visualize ChatGPT conversations as interactive trees",
-    "version": "0.0.9",
+    "description": "Visualize ChatGPT and Claude.ai conversations as interactive trees",
+    "version": "1.1.0",
     "manifest_version": 3,
     "icons": {
         "16": "logo16.png",

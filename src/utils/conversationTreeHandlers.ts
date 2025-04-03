@@ -60,6 +60,7 @@ export const createClaudeContextMenuHandler = (
 
       setMenu({
         message: node.data.text,
+        messageId: node.id,
         childrenTexts: childrenTexts,  // Now using the mapped text content
         role: node.data?.role ?? '',
         top: yPos < pane.height - 200 && yPos ? yPos - 48 : false,

@@ -18,24 +18,20 @@ export const calculateStepsClaude = (
   let currentNode = nodes.find((node) => node.id === targetId);
 
   if (!currentNode) {
-    chrome.runtime.sendMessage({ action: "log", message: "Target node not found, returning empty steps" });
     return [];
   }
 
  
   // Navigate up the tree while nodes are hidden
   while (currentNode?.data?.hidden) {
-    chrome.runtime.sendMessage({ action: "log", message: `Current node is hidden, navigating up. Current node: ${currentNode.data.text}` });
     
     const parent = nodes.find((n) => n.id === currentNode?.parent);
     if (!parent || !parent.children || parent.children.length === 0) {
-      chrome.runtime.sendMessage({ action: "log", message: "No valid parent found, breaking loop" });
       break;
     }
 
     const childIndex = parent.children.indexOf(currentNode.id);
     if (childIndex === -1) {
-      chrome.runtime.sendMessage({ action: "log", message: "Child not found in parent's children, breaking loop" });
       break;
     }
 
@@ -46,7 +42,6 @@ export const calculateStepsClaude = (
       const cachedIndex = parent.children.indexOf(cachedActiveChildId);
       if (cachedIndex !== -1) {
         activeChildIndex = cachedIndex;
-        chrome.runtime.sendMessage({ action: "log", message: `Using cached active child index: ${activeChildIndex}` });
       }
     }
 
@@ -54,12 +49,10 @@ export const calculateStepsClaude = (
       activeChildIndex = parent.children.findIndex(
         (childId) => nodes.find((node) => node.id === childId)?.data?.hidden === false
       );
-      chrome.runtime.sendMessage({ action: "log", message: `Found visible child index: ${activeChildIndex}` });
     }
 
     if (activeChildIndex === -1 && parent.children.length > 0) {
       activeChildIndex = 0;
-      chrome.runtime.sendMessage({ action: "log", message: "No visible children found, defaulting to first child" });
     }
 
     if (activeChildIndex !== -1 && activeChildIndex !== childIndex) {

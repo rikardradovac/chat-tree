@@ -849,12 +849,10 @@ async function selectBranchClaude(stepsToTake: any[]) {
       throw new Error('Current tab has no ID');
     }
 
-    console.log('selectBranchClaude', stepsToTake);
 
     await chrome.scripting.executeScript({
       target: { tabId: currentTab.id },
       func: (stepsToTake) => {
-        console.log('selectBranchClaude', stepsToTake);
 
 
         function findButtons(element: Element | null, maxDepth = 5) {
@@ -968,7 +966,6 @@ async function selectBranch(stepsToTake: any[]) {
       throw new Error('Current tab has no ID');
     }
 
-    console.log('selectBranch', stepsToTake);
 
     await chrome.scripting.executeScript({
       target: { tabId: currentTab.id },
@@ -1224,7 +1221,6 @@ async function goToTargetClaude(targetText: string) {
       for (const container of containers) {
         const containerHTML = container.innerHTML;
         if (htmlTextEqualsIgnoringArtifacts(containerHTML, targetText)) {
-          console.log("scrolling...");
           container.scrollIntoView({ behavior: 'smooth', block: 'center' });
           break;
         }
@@ -1236,7 +1232,6 @@ async function goToTargetClaude(targetText: string) {
 
 async function respondToMessageClaude(childrenIds: string[], message: string) {
   try {
-    console.log('🎯 respondToMessageClaude started with:', { childrenIds, message });
     
     if (!Array.isArray(childrenIds)) {
       throw new Error('childrenIds must be an array');
@@ -1309,7 +1304,6 @@ async function respondToMessageClaude(childrenIds: string[], message: string) {
           }
 
           // Find the edit button using the findButtons function
-          console.log('🔍 Looking for buttons');
           const buttons = findButtons(element);
           if (!buttons) {
             console.error('No buttons found');
