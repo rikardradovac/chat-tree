@@ -58,7 +58,6 @@ function captureClaudeOrgId() {
       if (details.url.startsWith(CLAUDE_ORG_PREFIX)) {
         const orgId = details.url.substring(CLAUDE_ORG_PREFIX.length).split('/')[0];
         if (orgId) {
-          console.log('🎯 Claude Organization ID:', orgId);
           claudeOrgId = orgId;
           // Store the org ID in chrome.storage for potential future use
           chrome.storage.session.set({ claudeOrgId: orgId });
@@ -202,7 +201,13 @@ chrome.runtime.onMessage.addListener(
       })();
       return true; // Keep message channel open for async response
     } else if (request.action === "goToTarget") {
+
       goToTarget(request.targetId);
+      sendResponse({ success: true });
+      return true;
+
+    } else if (request.action === "goToTargetClaude") {
+      goToTargetClaude(request.targetId);
       sendResponse({ success: true });
       return true;
     } else if (request.action === "log") {
@@ -218,6 +223,34 @@ chrome.runtime.onMessage.addListener(
         sendResponse({ orgId: result.claudeOrgId || null });
       });
       return true;
+    } else if (request.action === "respondToMessageClaude") {
+      (async () => {
+        try {
+          await respondToMessageClaude(request.childrenIds, request.message);
+          sendResponse({ success: true, completed: true });
+        } catch (error: any) {
+          sendResponse({ 
+            success: false, 
+            completed: false, 
+            error: error.message 
+          });
+        }
+      })();
+      return true; // Keep message channel open for async response
+    } else if (request.action === "editMessageClaude") {
+      (async () => {
+        try {
+          await editMessageClaude(request.messageId, request.message);
+          sendResponse({ success: true, completed: true });
+        } catch (error: any) {
+          sendResponse({ 
+            success: false, 
+            completed: false, 
+            error: error.message 
+          });
+        }
+      })();
+      return true; // Keep message channel open for async response
     }
     return false; // For non-async handlers
   }
@@ -491,13 +524,98 @@ async function checkNodesExistenceClaude(nodeTexts: string[] | undefined) {
   const results = await chrome.scripting.executeScript({
     target: { tabId: currentTab.id },
     func: (texts: string[]) => {
+      function htmlTextEqualsIgnoringArtifacts(html: string, text: string): boolean {
+        const decodeEntities = (str: string) =>
+          str
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&#39;/g, "'")
+            .replace(/&quot;/g, '"');
+
+        const stripMarkdown = (str: string) =>
+          str
+            .replace(/[*_`~>#-]/g, '')
+            .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+            .replace(/!\[(.*?)\]\(.*?\)/g, '$1');
+
+        const removeArtifactBlocks = (str: string) =>
+          str.replace(/<antArtifact[^>]*title="([^"]+)"[^>]*>[\s\S]*?<\/antArtifact>/gi, '$1 Document');
+
+        const normalize = (str: string) =>
+          decodeEntities(stripMarkdown(removeArtifactBlocks(str)))
+            .replace(/^\d+\.\s*/gm, '')   // remove numbered bullets
+            .replace(/^•\s*/gm, '')       // remove bullets
+            .replace(/\s+/g, ' ')         // collapse all whitespace
+            .trim();
+        
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        function getVisibleTextWithSpacing(node: Node, listStack: number[] = []): string {
+          let result = '';
+
+        
+          for (const child of node.childNodes) {
+            if (child.nodeType === Node.TEXT_NODE) {
+              result += child.textContent || '';
+            } else if (child.nodeType === Node.ELEMENT_NODE) {
+              const el = child as HTMLElement;
+              const tag = el.tagName.toLowerCase();
+        
+              if (tag === 'br') {
+                result += '\n';
+                continue;
+              }
+        
+              if (tag === 'ol') {
+                const startAttr = parseInt(el.getAttribute('start') || '1', 10);
+                listStack.push(startAttr);
+                result += '\n' + getVisibleTextWithSpacing(el, listStack) + '\n';
+                listStack.pop();
+                continue;
+              }
+        
+              if (tag === 'ul') {
+                listStack.push(-1); // sentinel for unordered
+                result += '\n' + getVisibleTextWithSpacing(el, listStack) + '\n';
+                listStack.pop();
+                continue;
+              }
+        
+              if (tag === 'li') {
+                let bullet = '• ';
+                if (listStack[listStack.length - 1] !== -1) {
+                  bullet = `${listStack[listStack.length - 1]++}. `;
+                }
+                result += bullet + getVisibleTextWithSpacing(el, listStack).trim() + '\n';
+                continue;
+              }
+        
+              result += getVisibleTextWithSpacing(el, listStack);
+              if (['p', 'div', 'section', 'article', 'li'].includes(tag)) {
+                result += '\n';
+              }
+            }
+          }
+        
+          return result;
+        }
+        
+        const htmlText = getVisibleTextWithSpacing(doc.body);
+
+        const normalizedHTML = normalize(htmlText);
+        const normalizedText = normalize(text);
+
+        return normalizedHTML === normalizedText;
+      }
+
       return texts.map(expectedText => {
-        const normalizedExpectedText = expectedText.trim().replace(/\s+/g, ' ');
         const containers = document.querySelectorAll('.grid-cols-1');
         
         for (const container of containers) {
-          const containerText = container.textContent?.trim().replace(/\s+/g, ' ');
-          if (containerText === normalizedExpectedText) {
+          const containerHTML = container.innerHTML;
+          if (htmlTextEqualsIgnoringArtifacts(containerHTML, expectedText)) {
             return false;
           }
         }
@@ -714,7 +832,6 @@ async function respondToMessage(childrenIds: string[], message: string) {
     args: [childrenIds, message]
   });
 }
-
 
 async function selectBranchClaude(stepsToTake: any[]) {
   try {
@@ -1015,12 +1132,99 @@ async function goToTargetClaude(targetText: string) {
   await chrome.scripting.executeScript({
     target: { tabId: currentTab.id ?? 0 },
     func: (targetText) => {
-      const normalizedTargetText = targetText.trim().replace(/\s+/g, ' ');
+      function htmlTextEqualsIgnoringArtifacts(html: string, text: string): boolean {
+        const decodeEntities = (str: string) =>
+          str
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&#39;/g, "'")
+            .replace(/&quot;/g, '"');
+
+        const stripMarkdown = (str: string) =>
+          str
+            .replace(/[*_`~>#-]/g, '')
+            .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+            .replace(/!\[(.*?)\]\(.*?\)/g, '$1');
+
+        const removeArtifactBlocks = (str: string) =>
+          str.replace(/<antArtifact[^>]*title="([^"]+)"[^>]*>[\s\S]*?<\/antArtifact>/gi, '$1 Document');
+
+        const normalize = (str: string) =>
+          decodeEntities(stripMarkdown(removeArtifactBlocks(str)))
+            .replace(/^\d+\.\s*/gm, '')   // remove numbered bullets
+            .replace(/^•\s*/gm, '')       // remove bullets
+            .replace(/\s+/g, ' ')         // collapse all whitespace
+            .trim();
+        
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        function getVisibleTextWithSpacing(node: Node, listStack: number[] = []): string {
+          let result = '';
+
+        
+          for (const child of node.childNodes) {
+            if (child.nodeType === Node.TEXT_NODE) {
+              result += child.textContent || '';
+            } else if (child.nodeType === Node.ELEMENT_NODE) {
+              const el = child as HTMLElement;
+              const tag = el.tagName.toLowerCase();
+        
+              if (tag === 'br') {
+                result += '\n';
+                continue;
+              }
+        
+              if (tag === 'ol') {
+                const startAttr = parseInt(el.getAttribute('start') || '1', 10);
+                listStack.push(startAttr);
+                result += '\n' + getVisibleTextWithSpacing(el, listStack) + '\n';
+                listStack.pop();
+                continue;
+              }
+        
+              if (tag === 'ul') {
+                listStack.push(-1); // sentinel for unordered
+                result += '\n' + getVisibleTextWithSpacing(el, listStack) + '\n';
+                listStack.pop();
+                continue;
+              }
+        
+              if (tag === 'li') {
+                let bullet = '• ';
+                if (listStack[listStack.length - 1] !== -1) {
+                  bullet = `${listStack[listStack.length - 1]++}. `;
+                }
+                result += bullet + getVisibleTextWithSpacing(el, listStack).trim() + '\n';
+                continue;
+              }
+        
+              result += getVisibleTextWithSpacing(el, listStack);
+              if (['p', 'div', 'section', 'article', 'li'].includes(tag)) {
+                result += '\n';
+              }
+            }
+          }
+        
+          return result;
+        }
+        
+        const htmlText = getVisibleTextWithSpacing(doc.body);
+
+        const normalizedHTML = normalize(htmlText);
+        const normalizedText = normalize(text);
+
+
+        return normalizedHTML === normalizedText;
+      }
+
       const containers = document.querySelectorAll('.grid-cols-1');
       
       for (const container of containers) {
-        const containerText = container.textContent?.trim().replace(/\s+/g, ' ');
-        if (containerText === normalizedTargetText) {
+        const containerHTML = container.innerHTML;
+        if (htmlTextEqualsIgnoringArtifacts(containerHTML, targetText)) {
+          console.log("scrolling...");
           container.scrollIntoView({ behavior: 'smooth', block: 'center' });
           break;
         }
@@ -1028,6 +1232,312 @@ async function goToTargetClaude(targetText: string) {
     },
     args: [targetText]
   })
+}
+
+async function respondToMessageClaude(childrenIds: string[], message: string) {
+  try {
+    console.log('🎯 respondToMessageClaude started with:', { childrenIds, message });
+    
+    if (!Array.isArray(childrenIds)) {
+      throw new Error('childrenIds must be an array');
+    }
+
+    if (typeof message !== 'string') {
+      throw new Error('message must be a string');
+    }
+
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tabs || tabs.length === 0) {
+      throw new Error('No active tab found');
+    }
+    const currentTab = tabs[0];
+    if (!currentTab.id) {
+      throw new Error('Current tab has no ID');
+    }
+
+    await chrome.scripting.executeScript({
+      target: { tabId: currentTab.id },
+      func: (childrenIds, message) => {
+        // Helper function to wait for DOM changes with specific state check
+        
+        function findButtons(element: Element | null, maxDepth = 5) {
+          if (!element) {
+            console.log('No element provided to findButtons');
+            return null;
+          }
+        
+          if (maxDepth <= 0) {
+            console.log('Reached maximum depth in findButtons');
+            return null;
+          }
+        
+          const buttons = element.querySelectorAll('button');
+        
+        
+          if (buttons.length > 0) {
+            return Array.from(buttons);
+          }
+        
+          return findButtons(element.parentElement, maxDepth - 1);
+        }
+
+        const performResponse = async () => {
+         
+          
+          // Find the first visible message element
+          let element = null;
+          for (const messageId of childrenIds) {
+           
+            const normalizedTargetText = messageId.trim().replace(/\s+/g, ' ');
+            const containers = document.querySelectorAll('.grid-cols-1');
+            
+            
+            for (const container of containers) {
+              const containerText = container.textContent?.trim().replace(/\s+/g, ' ');
+              if (containerText === normalizedTargetText) {
+                
+                element = container;
+                break;
+              }
+            }
+            if (element) break;
+          }
+
+          if (!element) {
+            console.error('No visible message element found');
+            throw new Error('No visible message element found');
+          }
+
+          // Find the edit button using the findButtons function
+          console.log('🔍 Looking for buttons');
+          const buttons = findButtons(element);
+          if (!buttons) {
+            console.error('No buttons found');
+            throw new Error('No buttons found');
+          }
+
+          // Find the edit button (it's usually the first button)
+          const editButton = buttons[0];
+          if (!editButton) {
+            console.error('Edit button not found');
+            throw new Error('Edit button not found');
+          }
+
+          editButton.click();
+
+          // Wait for the new textarea to appear
+          let textArea: HTMLTextAreaElement | null = null;
+          let attempts = 0;
+          const maxAttempts = 10;
+          
+          while (!textArea && attempts < maxAttempts) {
+            // Look for textarea with the specific class pattern
+            textArea = document.querySelector('textarea.bg-bg-000.border.border-border-300') as HTMLTextAreaElement;
+            if (!textArea) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+              attempts++;
+            }
+          }
+
+          if (!textArea) {
+            console.error('Textarea not found after multiple attempts');
+            throw new Error('Textarea not found after multiple attempts');
+          }
+
+          textArea.value = message as string;
+          textArea.dispatchEvent(new Event('input', { bubbles: true }));
+
+          // Find the parent element that contains the buttons
+          let buttonContainer: HTMLElement | null = textArea;
+          let iterations = 0;
+          const maxIterations = 5;
+          
+          while (iterations < maxIterations) {
+            buttonContainer = buttonContainer.parentElement;
+            if (!buttonContainer) break;
+            
+            const buttons = buttonContainer.querySelectorAll('button');
+            if (buttons.length > 0) {
+              console.log('Found button container');
+              break;
+            }
+            iterations++;
+          }
+
+          if (!buttonContainer) {
+            console.error('Could not find button container');
+            throw new Error('Could not find button container');
+          }
+
+          // Find and click the send button (usually the second button)
+          const sendButton = buttonContainer.querySelectorAll('button')[1];
+          if (!sendButton) {
+            console.error('Send button not found');
+            throw new Error('Send button not found');
+          }
+
+          sendButton.click();
+        };
+
+        return performResponse().catch(error => {
+          console.error('Error in respondToMessageClaude:', error);
+          throw error;
+        });
+      },
+      args: [childrenIds, message]
+    });
+  } catch (error) {
+    console.error('respondToMessageClaude failed:', error);
+    throw error;
+  }
+}
+
+async function editMessageClaude(messageText: string, newMessage: string) {
+  try {
+    
+    if (typeof messageText !== 'string') {
+      throw new Error('messageText must be a string');
+    }
+
+    if (typeof newMessage !== 'string') {
+      throw new Error('newMessage must be a string');
+    }
+
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tabs || tabs.length === 0) {
+      throw new Error('No active tab found');
+    }
+    const currentTab = tabs[0];
+    if (!currentTab.id) {
+      throw new Error('Current tab has no ID');
+    }
+
+    await chrome.scripting.executeScript({
+      target: { tabId: currentTab.id },
+      func: (messageText, newMessage) => {
+        function findButtons(element: Element | null, maxDepth = 5) {
+          if (!element) {
+            console.log('No element provided to findButtons');
+            return null;
+          }
+        
+          if (maxDepth <= 0) {
+            console.log('Reached maximum depth in findButtons');
+            return null;
+          }
+        
+          const buttons = element.querySelectorAll('button');
+         
+        
+          if (buttons.length > 0) {
+            return Array.from(buttons);
+          }
+        
+          return findButtons(element.parentElement, maxDepth - 1);
+        }
+
+        const performEdit = async () => {
+          console.log('🚀 Starting performEdit');
+          
+          // Find the message element
+          const normalizedTargetText = messageText.trim().replace(/\s+/g, ' ');
+          const containers = document.querySelectorAll('.grid-cols-1');
+          
+          let element = null;
+          for (const container of containers) {
+            const containerText = container.textContent?.trim().replace(/\s+/g, ' ');
+            if (containerText === normalizedTargetText) {
+              element = container;
+              break;
+            }
+          }
+
+          if (!element) {
+            console.error('No visible message element found');
+            throw new Error('No visible message element found');
+          }
+
+          // Find the edit button using the findButtons function
+          console.log('🔍 Looking for buttons');
+          const buttons = findButtons(element);
+          if (!buttons) {
+            console.error('No buttons found');
+            throw new Error('No buttons found');
+          }
+
+          // Find the edit button (it's usually the first button)
+          const editButton = buttons[0];
+          if (!editButton) {
+            console.error('Edit button not found');
+            throw new Error('Edit button not found');
+          }
+
+          editButton.click();
+
+          // Wait for the new textarea to appear
+          let textArea: HTMLTextAreaElement | null = null;
+          let attempts = 0;
+          const maxAttempts = 10;
+          
+          while (!textArea && attempts < maxAttempts) {
+            // Look for textarea with the specific class pattern
+            textArea = document.querySelector('textarea.bg-bg-000.border.border-border-300') as HTMLTextAreaElement;
+            if (!textArea) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+              attempts++;
+            }
+          }
+
+          if (!textArea) {
+            console.error('Textarea not found after multiple attempts');
+            throw new Error('Textarea not found after multiple attempts');
+          }
+
+          textArea.value = newMessage;
+          textArea.dispatchEvent(new Event('input', { bubbles: true }));
+
+          // Find the parent element that contains the buttons
+          let buttonContainer: HTMLElement | null = textArea;
+          let iterations = 0;
+          const maxIterations = 5;
+          
+          while (iterations < maxIterations) {
+            buttonContainer = buttonContainer.parentElement;
+            if (!buttonContainer) break;
+            
+            const buttons = buttonContainer.querySelectorAll('button');
+            if (buttons.length > 0) {
+              break;
+            }
+            iterations++;
+          }
+
+          if (!buttonContainer) {
+            console.error('Could not find button container');
+            throw new Error('Could not find button container');
+          }
+
+          // Find and click the send button (usually the second button)
+          const sendButton = buttonContainer.querySelectorAll('button')[1];
+          if (!sendButton) {
+            console.error('Send button not found');
+            throw new Error('Send button not found');
+          }
+
+          sendButton.click();
+        };
+
+        return performEdit().catch(error => {
+          console.error('Error in editMessageClaude:', error);
+          throw error;
+        });
+      },
+      args: [messageText, newMessage]
+    });
+  } catch (error) {
+    console.error('editMessageClaude failed:', error);
+    throw error;
+  }
 }
 
 captureHeaders();
@@ -1040,14 +1550,14 @@ chrome.tabs.onUpdated.addListener(async (tabId, _info, tab) => {
       return;
     }
     const url = new URL(tab.url);
-    if (url.origin === CHATGPT_ORIGIN) {
+    if (url.origin === CHATGPT_ORIGIN || url.origin === CLAUDE_ORIGIN) {
       await chrome.sidePanel.setOptions({
         tabId,
         path: 'index.html',
         enabled: true
       });
       
-      // Trigger native events when a ChatGPT page is loaded or updated
+      // Trigger native events when a ChatGPT or Claude page is loaded or updated
       // Wait a bit for the page to fully load
       setTimeout(() => {
         triggerNativeArticleEvents();
@@ -1091,3 +1601,4 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
   .catch((error) => console.error(error));
+

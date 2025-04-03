@@ -3,14 +3,14 @@ import { ReactFlow, addEdge, Connection, MiniMap, Controls, Background, Backgrou
 import { ContextMenu } from './ContextMenu';
 import { LoadingSpinner, ErrorState } from "./LoadingStates";
 import { useConversationTree } from '../hooks/useConversationTree';
-import { createContextMenuHandler, checkNodes, checkNodesClaude } from '../utils/conversationTreeHandlers';
+import { createContextMenuHandler, checkNodes, checkNodesClaude, createClaudeContextMenuHandler } from '../utils/conversationTreeHandlers';
 import { createNodesInOrder } from '../utils/nodeCreation';
 import { createClaudeNodesInOrder} from '../utils/claudeNodeCreation';
 import { calculateSteps } from '../utils/nodeNavigation';
 import { ExportButton } from './ExportButton';
 import { CustomNode } from "./CustomNode";
 import { SearchBar } from './SearchBar';
-import { OpenAIConversationData, ClaudeConversation } from '../types/interfaces';
+import { OpenAIConversationData, ClaudeConversation, ClaudeNode} from '../types/interfaces';
 import { calculateStepsClaude } from '../utils/nodeNavigationClaude';
 import '@xyflow/react/dist/style.css';
 
@@ -38,7 +38,20 @@ const ConversationTree = () => {
     onEdgesChange
   } = useConversationTree();
 
+  type FlowEdge = {
+    id: string;
+    source: string;
+    target: string;
+    type?: string;
+    animated?: boolean;
+    style?: any;
+  };
+
+  const typedEdges = edges as FlowEdge[];
+
   const [showSearch, setShowSearch] = useState(false);
+  const [lastActiveChildMap, setLastActiveChildMap] = useState<Record<string, string>>({});
+  const [previousPathNodeIds, setPreviousPathNodeIds] = useState<Set<string>>(new Set());
 
   // Create nodes and edges when conversation data changes
   useEffect(() => {
@@ -71,7 +84,7 @@ const ConversationTree = () => {
 
   // Add another useEffect to handle initial data fetch
   useEffect(() => {
-    chrome.runtime.sendMessage({ action: "log", message: "Starting initial data fetch" });
+   
     handleRefresh();
   }, []);
 
@@ -125,32 +138,123 @@ const ConversationTree = () => {
         }))
       );
     } else {
+      // Claude case
       const nodeTexts = nodes.map((node: any) => node.data.text);
-     
       const existingNodes = await checkNodesClaude(nodeTexts);
       
+      // Create a map of node IDs to their parents for efficient lookup
+      const parentMap: Record<string, string> = {};
+      edges.forEach((edge: any) => {
+        parentMap[edge.target] = edge.source;
+      });
+
+      // Create a map of node IDs to their visibility status
+      const visibilityMap: Record<string, boolean> = {};
+      nodes.forEach((node: any, index: number) => {
+        visibilityMap[node.id] = !existingNodes[index];
+      });
+
       setNodes((prevNodes: any) => 
-        prevNodes.map((node: any, index: number) => ({
-          ...node,
-          data: {
-            ...node.data,
-            hidden: existingNodes[index]
+        prevNodes.map((node: any, index: number) => {
+          const isHidden = existingNodes[index];
+          const wasOnPreviousPath = previousPathNodeIds.has(node.id);
+          
+          let isPreviouslyVisited = false;
+          if (wasOnPreviousPath && isHidden) {
+            // Check if parent is hidden - if parent is visible, we're on a new branch
+            const parentId = parentMap[node.id];
+            if (!parentId || visibilityMap[parentId]) {
+              // No parent (root) or parent is visible - we're on a new branch
+              isPreviouslyVisited = false;
+            } else {
+              // Parent is hidden - maintain previously visited state
+              isPreviouslyVisited = true;
+            }
           }
-        }))
+
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              hidden: isHidden,
+              previouslyVisited: isPreviouslyVisited
+            }
+          };
+        })
       );
     }
-  }, [nodes, provider]);
+  }, [nodes, provider, edges, previousPathNodeIds]);
 
   // Calculate navigation steps when a node is clicked
   const handleNodeClick = useCallback((messageId: string) => {
     setMenu(null);
-    const calculateStepsFn = provider === 'openai' ? calculateSteps : calculateStepsClaude;
-    return calculateStepsFn(nodes, messageId);
-  }, [nodes, provider]);
+    
+    if (provider === 'openai') {
+      return calculateSteps(nodes, messageId);
+    } else {
+      
+      // Find the parent of the clicked node
+      const parentEdge = typedEdges.find(edge => edge.target === messageId);
+      if (parentEdge) {
+        const parentId = parentEdge.source;
+          
+        // Update the lastActiveChildMap with this new active child
+        setLastActiveChildMap(prev => {
+          const updated = { ...prev, [parentId]: messageId };
+          
+          return updated;
+        });
+      }
+
+      // For Claude, store the currently visible nodes before navigation
+      const currentlyVisibleNodes = new Set(
+        nodes
+          .filter((node: any) => !node.data.hidden)
+          .map((node: any) => node.id)
+      );
+      setPreviousPathNodeIds(currentlyVisibleNodes);
+
+      // Calculate and execute navigation steps
+      const steps = calculateStepsClaude(nodes as ClaudeNode[], messageId, lastActiveChildMap);
+      
+      // After navigation completes, update visibility states
+      setTimeout(async () => {
+        await updateNodesVisibility();
+      }, 100); // Small delay to ensure DOM updates have completed
+
+      return steps;
+    }
+  }, [nodes, provider, lastActiveChildMap, typedEdges, updateNodesVisibility]);
+
+  useEffect(() => {
+    const messageListener = (message: any, _sender: chrome.runtime.MessageSender, _sendResponse: (response?: any) => void) => {
+      if (message.action === "updateLastActiveChild" && message.parentId && message.activeChildId) {
+        
+        setLastActiveChildMap(prevMap => {
+          const updated = { ...prevMap, [message.parentId]: message.activeChildId };
+         
+          return updated;
+        });
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(messageListener);
+
+    return () => {
+      chrome.runtime.onMessage.removeListener(messageListener);
+    };
+  }, []);
 
   const onNodeContextMenu = useCallback(
-    createContextMenuHandler(ref, setMenu),
-    [ref, setMenu]
+    (event: React.MouseEvent, node: any) => {
+      if (provider === 'openai') {
+        createContextMenuHandler(ref, setMenu)(event, node);
+      } else {
+        chrome.runtime.sendMessage({ action: "log", message: `Creating Claude context menu for node ${node.id}` });
+        createClaudeContextMenuHandler(ref, setMenu, nodes)(event, node);
+      }
+    },
+    [ref, setMenu, provider, nodes]
   );
 
   const onPaneClick = useCallback(() => setMenu(null), [setMenu]);

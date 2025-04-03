@@ -21,8 +21,8 @@ export const createClaudeNodesInOrder = async (
     position: { x: 0, y: 0 },
     message: null,
     data: {
-      label: 'Conversation Root',
-      text: 'Conversation Root',
+      label: 'Start of your conversation',
+      text: 'Start of your conversation',
       role: 'system',
       timestamp: new Date().getTime(),
       id: 'root',
@@ -87,7 +87,6 @@ export const createClaudeNodesInOrder = async (
   });
 
   // Update visibility state of nodes
-  chrome.runtime.sendMessage({ action: "log", message: "Checking node visibility states" });
   const nodesToCheck = newNodes.filter(node => node.id !== 'root'); // Don't check root node
   const existingNodes = await checkNodes(nodesToCheck.map(node => node.data.text));
   existingNodes.forEach((hidden: boolean, index: number) => {
@@ -96,12 +95,10 @@ export const createClaudeNodesInOrder = async (
     }
   });
 
-  chrome.runtime.sendMessage({ action: "log", message: "Starting node layout" });
   return layoutNodes(newNodes, newEdges);
 };
 
 const layoutNodes = (nodes: ClaudeNode[], edges: ClaudeEdge[]) => {
-  chrome.runtime.sendMessage({ action: "log", message: `Layouting ${nodes.length} nodes and ${edges.length} edges` });
   
   // Initialize dagre graph with node dimensions
   nodes.forEach((node) => {
@@ -129,6 +126,5 @@ const layoutNodes = (nodes: ClaudeNode[], edges: ClaudeEdge[]) => {
     };
   });
 
-  chrome.runtime.sendMessage({ action: "log", message: "Node layout completed" });
   return { nodes: nodesWithPositions, edges };
 };

@@ -31,7 +31,11 @@ export const createContextMenuHandler = (ref: React.RefObject<HTMLDivElement>, s
   };
 };
 
-export const createClaudeContextMenuHandler = (ref: React.RefObject<HTMLDivElement>, setMenu: (menu: ClaudeMenuState) => void) => {
+export const createClaudeContextMenuHandler = (
+  ref: React.RefObject<HTMLDivElement>, 
+  setMenu: (menu: ClaudeMenuState) => void,
+  nodes: ClaudeNode[]
+) => {
   return (event: React.MouseEvent, node: ClaudeNode) => {
     event.preventDefault();
     
@@ -46,9 +50,17 @@ export const createClaudeContextMenuHandler = (ref: React.RefObject<HTMLDivEleme
       const yPos = event.clientY + scrollTop;
       const xPos = event.clientX + scrollLeft;
 
+      // Map child IDs to their text content
+      const childrenTexts = node.children.map(childId => {
+        // Find the child node in the graph
+        const childNode = nodes.find(n => n.id === childId);
+        // Return the text content if found, or empty string if not
+        return childNode?.data?.text || '';
+      });
+
       setMenu({
         message: node.data.text,
-        childrenTexts: node.children,
+        childrenTexts: childrenTexts,  // Now using the mapped text content
         role: node.data?.role ?? '',
         top: yPos < pane.height - 200 && yPos ? yPos - 48 : false,
         left: xPos < pane.width - 200 && xPos ? xPos : false,

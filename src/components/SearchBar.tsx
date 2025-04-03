@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { ConversationProvider, OpenAINode } from '../types/interfaces';
+import { ClaudeNode, ConversationProvider, OpenAINode } from '../types/interfaces';
 
 interface SearchBarProps {
-  nodes: OpenAINode[];
+  nodes: OpenAINode[] | ClaudeNode[];
   onNodeClick: (messageId: string) => any[];
   onClose: () => void;
   onRefresh: () => void;
@@ -11,7 +11,7 @@ interface SearchBarProps {
 
 interface SearchResult {
   nodeId: string;
-  node: OpenAINode;
+  node: OpenAINode | ClaudeNode;
   matches: number;
   preview: string;
 }

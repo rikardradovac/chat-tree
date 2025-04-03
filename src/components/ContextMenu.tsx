@@ -1,11 +1,18 @@
 import { useState, useRef, useEffect } from 'react';
-import { OpenAIContextMenuProps } from '../types/interfaces';
+import { ContextMenuProps } from '../types/interfaces';
 
-export const ContextMenu = (props: OpenAIContextMenuProps) => {
+export const ContextMenu = (props: ContextMenuProps) => {
     // Group state declarations
     const [showInput, setShowInput] = useState(false);
     const [inputValue, setInputValue] = useState(props.role === 'user' ? (props.message || '') : '');
     const menuRef = useRef<HTMLDivElement>(null);
+
+    chrome.runtime.sendMessage({
+        action: "log",
+        message: `
+            Context Menu Props: ${JSON.stringify(props)}
+        `
+    });
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -21,7 +28,7 @@ export const ContextMenu = (props: OpenAIContextMenuProps) => {
     }, [props.onClick]);
 
     const handleActionClick = () => {
-        if (props.role === 'user') {
+        if (props.role === 'user' || props.role === 'human') {
             setInputValue(props.message || '');
         } else {
             setInputValue('');
@@ -33,8 +40,7 @@ export const ContextMenu = (props: OpenAIContextMenuProps) => {
         if (!inputValue.trim()) return;
 
         await selectBranch();
-        
-        if (props.role === 'user') {
+        if (props.role === 'user' || props.role === 'human') {
             await editMessage();
         } else if (props.role === 'assistant') {
             await respondToMessage();
@@ -51,9 +57,12 @@ export const ContextMenu = (props: OpenAIContextMenuProps) => {
             await selectBranch();
         }
 
+        const action = props.provider === 'openai' ? 'editMessage' : 'editMessageClaude';
+        const messageId = props.provider === 'openai' ? props.messageId : props.message;
+
         const response = await chrome.runtime.sendMessage({ 
-            action: 'editMessage', 
-            messageId: props.messageId, 
+            action: action, 
+            messageId: messageId, 
             message: inputValue,
             requireCompletion: true
         });
@@ -72,9 +81,12 @@ export const ContextMenu = (props: OpenAIContextMenuProps) => {
             await selectBranch();
         }
 
+        const childrenIds = props.provider === 'openai' ? props.childrenIds : props.childrenTexts;
+        const action = props.provider === 'openai' ? 'respondToMessage' : 'respondToMessageClaude';
+
         const response = await chrome.runtime.sendMessage({ 
-            action: 'respondToMessage', 
-            childrenIds: props.childrenIds, 
+            action: action, 
+            childrenIds: childrenIds, 
             message: inputValue,
             requireCompletion: true
         });
@@ -109,8 +121,8 @@ export const ContextMenu = (props: OpenAIContextMenuProps) => {
 
             props.onRefresh();
             await chrome.runtime.sendMessage({ 
-                action: "goToTarget", 
-                targetId: props.messageId 
+                action: props.provider === 'openai' ? "goToTarget" : "goToTargetClaude", 
+                targetId: props.provider === 'openai' ? props.messageId : props.message 
             });
         } catch (error) {
             console.error('Error executing steps:', error);
@@ -125,6 +137,11 @@ export const ContextMenu = (props: OpenAIContextMenuProps) => {
         right: typeof props.right === 'number' ? `${props.right}px` : undefined,
         bottom: typeof props.bottom === 'number' ? `${props.bottom}px` : undefined,
     });
+
+    // Check if node has children based on provider
+    const hasChildren = props.provider === 'openai' 
+        ? props.childrenIds && props.childrenIds.length > 0
+        : props.childrenTexts && props.childrenTexts.length > 0;
 
     return (
         <div
@@ -144,12 +161,12 @@ export const ContextMenu = (props: OpenAIContextMenuProps) => {
                 >
                     Select
                 </button>
-                {(props.childrenIds && props.childrenIds.length > 0) && (
+                {hasChildren && (
                     <button 
                         className="w-full px-2 py-1.5 text-sm text-left text-gray-700 hover:bg-gray-50 rounded transition-colors" 
                         onClick={handleActionClick}
                     >
-                        {props.role === 'user' ? 'Edit this message' : 'Respond to this message'}
+                        {props.role === 'user' || props.role === 'human' ? 'Edit this message' : 'Respond to this message'}
                     </button>
                 )}
                 {showInput && (
@@ -164,7 +181,7 @@ export const ContextMenu = (props: OpenAIContextMenuProps) => {
                                     }
                                 }}
                                 className="w-full px-4 py-2 text-sm text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 min-h-[100px] resize-y"
-                                placeholder={props.role === 'user' ? "Edit message..." : "Type your response..."}
+                                placeholder={props.role === 'user' || props.role === 'human' ? "Edit message..." : "Type your response..."}
                                 autoFocus
                             />
                             <div className="flex justify-between items-center mt-2">

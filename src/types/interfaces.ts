@@ -173,11 +173,12 @@ export type OpenAIMenuState = {
     hidden?: boolean;
 } | null;
 
-export interface OpenAIContextMenuProps {
+export interface ContextMenuProps {
     provider: ConversationProvider;
     messageId: string;
     message: string; // Likely message content preview
-    childrenIds: string[];
+    childrenIds?: string[];
+    childrenTexts?: string[];
     role: string;
     top: number | boolean;
     left: number | boolean;
