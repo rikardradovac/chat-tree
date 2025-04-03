@@ -1,21 +1,22 @@
 import { useState, useEffect, useRef } from 'react';
-import { Node } from '../types/interfaces';
+import { ClaudeNode, ConversationProvider, OpenAINode, ClaudeContentBlock } from '../types/interfaces';
 
 interface SearchBarProps {
-  nodes: Node[];
+  nodes: OpenAINode[] | ClaudeNode[];
   onNodeClick: (messageId: string) => any[];
   onClose: () => void;
   onRefresh: () => void;
+  provider: ConversationProvider;
 }
 
 interface SearchResult {
   nodeId: string;
-  node: Node;
+  node: OpenAINode | ClaudeNode;
   matches: number;
   preview: string;
 }
 
-export const SearchBar = ({ nodes, onNodeClick, onClose, onRefresh }: SearchBarProps) => {
+export const SearchBar = ({ nodes, onNodeClick, onClose, onRefresh, provider }: SearchBarProps) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -42,7 +43,7 @@ export const SearchBar = ({ nodes, onNodeClick, onClose, onRefresh }: SearchBarP
           const steps = onNodeClick(selectedResult.nodeId);
           if (steps) {
             chrome.runtime.sendMessage({ 
-              action: "executeSteps", 
+              action: provider === 'openai' ? "executeSteps" : "executeStepsClaude", 
               steps: steps,
               requireCompletion: true
             }).then(() => {
@@ -61,7 +62,7 @@ export const SearchBar = ({ nodes, onNodeClick, onClose, onRefresh }: SearchBarP
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [results, selectedIndex, onNodeClick, onClose, onRefresh]);
+  }, [results, selectedIndex, onNodeClick, onClose, onRefresh, provider]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -73,14 +74,28 @@ export const SearchBar = ({ nodes, onNodeClick, onClose, onRefresh }: SearchBarP
     const searchQuery = query.toLowerCase();
 
     nodes.forEach(node => {
-      if (!node.data?.label) return;
+      let content = '';
+      let matches = 0;
 
-      const content = node.data.label.toLowerCase();
-      const matches = (content.match(new RegExp(searchQuery, 'g')) || []).length;
+      if (provider === 'openai') {
+        content = node.data?.label || '';
+      } else {
+        // For Claude, get content from message blocks
+        const claudeNode = node as ClaudeNode;
+        content = (claudeNode.message?.content || [])
+          .filter((block: ClaudeContentBlock) => block.type === 'text')
+          .map((block: ClaudeContentBlock) => block.text)
+          .join(' ');
+      }
+
+      if (!content) return;
+
+      const contentLower = content.toLowerCase();
+      matches = (contentLower.match(new RegExp(searchQuery, 'g')) || []).length;
 
       if (matches > 0) {
         // Create a preview with highlighted matches
-        const preview = node.data.label.slice(0, 100) + (node.data.label.length > 100 ? '...' : '');
+        const preview = content.slice(0, 100) + (content.length > 100 ? '...' : '');
         
         searchResults.push({
           nodeId: node.id,
@@ -101,13 +116,13 @@ export const SearchBar = ({ nodes, onNodeClick, onClose, onRefresh }: SearchBarP
 
     setResults(searchResults);
     setSelectedIndex(0);
-  }, [query, nodes]);
+  }, [query, nodes, provider]);
 
   const handleResultClick = (result: SearchResult) => {
     const steps = onNodeClick(result.nodeId);
     if (steps) {
       chrome.runtime.sendMessage({ 
-        action: "executeSteps", 
+        action: provider === 'openai' ? "executeSteps" : "executeStepsClaude", 
         steps: steps,
         requireCompletion: true
       }).then(() => {
@@ -156,7 +171,7 @@ export const SearchBar = ({ nodes, onNodeClick, onClose, onRefresh }: SearchBarP
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <span className="text-sm font-medium text-gray-900">
-                        {result.node.data?.role === 'user' ? 'You' : 'Assistant'}
+                        {result.node.data?.role === (provider === 'openai' ? 'user' : 'human') ? 'You' : 'Assistant'}
                       </span>
                       <span className="text-sm text-gray-500">
                         {new Date((result.node.data?.timestamp || 0) * 1000).toLocaleString()}

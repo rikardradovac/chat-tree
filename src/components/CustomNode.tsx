@@ -35,7 +35,7 @@ export const CustomNode = ({ data }: { data: any }) => {
         <div 
           // Dynamic classes for styling based on role (user/assistant), visibility, and expansion state
           className={`px-4 py-2 shadow-lg rounded-lg border transition-all duration-300 
-            ${data.role === 'user' ? 'bg-yellow-50 border-yellow-200' : data.role === 'assistant' ? 'bg-gray-50 border-gray-200' : 'bg-gray-50 border-gray-200'}
+            ${data.role === 'user' || data.role === 'human' ? 'bg-yellow-50 border-yellow-200' : data.role === 'assistant' ? 'bg-gray-50 border-gray-200' : 'bg-gray-50 border-gray-200'}
             ${data.hidden ? 'grayscale' : ''}
             ${isExpanded ? 'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-[80vw] h-[80vh]' : ''}
           `} 

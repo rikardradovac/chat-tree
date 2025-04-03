@@ -1,10 +1,10 @@
 import dagre from '@dagrejs/dagre';
-import { Node, Edge } from '../types/interfaces';
+import { OpenAINode, OpenAIEdge } from '../types/interfaces';
 import { nodeWidth, nodeHeight } from "../constants/constants";
 
 const dagreGraph = new dagre.graphlib.Graph().setGraph({}).setDefaultEdgeLabel(() => ({}));
 
-export const layoutNodes = (nodes: Node[], edges: Edge[]) => {
+export const layoutNodes = (nodes: OpenAINode[], edges: OpenAIEdge[]) => {
     // Reset the graph
     dagreGraph.setGraph({});
     

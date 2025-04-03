@@ -1,10 +1,10 @@
-import { Node } from '../types/interfaces';
+import { OpenAINode } from '../types/interfaces';
 
 
 // Traverses up the node tree to find the first parent with valid user content.
 // Also cleans up the parent-child relationships by removing invalid intermediate nodes.
-export const findFirstContentParent = (node: Node, mapping: Record<string, Node>): Node | null => {
-    const queue: Node[] = [...node.children.map(childId => mapping[childId])];
+export const findFirstContentParent = (node: OpenAINode, mapping: Record<string, OpenAINode>): OpenAINode | null => {
+    const queue: OpenAINode[] = [...node.children.map(childId => mapping[childId])];
     
     while (queue.length > 0) {
         const currentNode = queue.shift()!;
@@ -42,7 +42,7 @@ export const findFirstContentParent = (node: Node, mapping: Record<string, Node>
 
 // Validates if a node contains meaningful content and is from a supported author type
 
-export const isValidNode = (node: Node): boolean => {
+export const isValidNode = (node: OpenAINode): boolean => {
     
     return !!(node.message?.content?.parts?.[0] &&
         node.message.author.role !== 'system' && 
@@ -53,7 +53,7 @@ export const isValidNode = (node: Node): boolean => {
 
 // Extracts the text content from a node, handling different content types
 
-export const getNodeContent = (node: Node): string => {
+export const getNodeContent = (node: OpenAINode): string => {
     if (!node.message?.content) return '';
     
     if (node.message.content.content_type !== 'text') {

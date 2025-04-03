@@ -1,9 +1,9 @@
-import { Node } from '../types/interfaces';
+import { OpenAINode } from '../types/interfaces';
 import { useState } from 'react';
 import { ExportModal } from './ExportModal';
 
 interface ExportButtonProps {
-  nodes: Node[];
+  nodes: OpenAINode[];
   conversationData: any;
   className?: string;
 }
