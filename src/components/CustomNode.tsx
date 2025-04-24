@@ -1,6 +1,7 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useState } from 'react';
+import { useEffect } from 'react';
 import {
   Handle,
   Position,
@@ -9,9 +10,24 @@ import {
 import { nodeWidth, nodeHeight } from "../constants/constants"
 
 
+
 export const CustomNode = ({ data }: { data: any }) => {   
     // State to track if the node is expanded to full screen
     const [isExpanded, setIsExpanded] = useState(false);
+    
+    useEffect(() => {
+      const handler = (e: CustomEvent) => {
+        if (e.detail?.nodeId === data.id) {
+          setIsExpanded(true);
+        }
+      };
+    
+      window.addEventListener('expand-node', handler as EventListener);
+    
+      return () => {
+        window.removeEventListener('expand-node', handler as EventListener);
+      };
+    }, [data.id]);
   
     const getNodeStyle = (role: string) => {
       if (role === 'user') {
@@ -48,7 +64,14 @@ export const CustomNode = ({ data }: { data: any }) => {
             background: data.hidden && !isExpanded ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px)' : undefined,
             ...getNodeStyle(data.role)
           }}
-          onDoubleClick={() => setIsExpanded(!isExpanded)}
+          onDoubleClick={() => {
+            if (data.id) {
+              chrome.runtime.sendMessage({
+                action: "goToTarget",
+                targetId: data.id,
+              });
+            }
+          }}
         >
           {/* Connection handle - only shown when not expanded */}
           {!isExpanded && <Handle type="target" position={Position.Top} className="w-2 h-2" />}
