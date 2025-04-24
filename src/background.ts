@@ -669,25 +669,38 @@ async function editMessage(messageId: string, message: string) {
         const buttonDiv = element.parentElement?.parentElement;
         if (!buttonDiv) throw new Error('Button container not found');
 
-        // Click edit button
-        const buttons = buttonDiv.querySelectorAll("button");
-        const editButton = Array.from(buttons).find(button => 
-          button.getAttribute('aria-label') === "Edit message"
-        );
-        if (!editButton) throw new Error('Edit button not found');
+        let button = null;
+        let attempts = 0;
+        const maxAttempts = 50;
+
+        while (!button && attempts < maxAttempts) {
+          const buttons = Array.from(buttonDiv.querySelectorAll("button"));
+          // For user messages, buttons are [copy, edit, left, right]
+          // For assistant messages, buttons are [buttons..., left, right, copy, thumbs up, thumbs down, read aloud, regenerate]
+          const isAssistant = element.getAttribute('data-message-author-role') === 'assistant';
+          const buttonIndex = isAssistant ? buttons.length - 7 : 1; // edit is always second button for user, or 7th from end for assistant
+          button = buttons[buttonIndex];
+          
+          if (!button) {
+            attempts++;
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
+
+        if (!button) throw new Error('Edit button not found');
         
-        editButton.click();
+        button.click();
         await waitForDomChange(buttonDiv);
 
         // Set textarea value
         let textArea = buttonDiv.querySelector("textarea");
-        let attempts = 0;
-        const maxAttempts = 5;
+        let textAreaAttempts = 0;
+        const maxTextAreaAttempts = 5;
         
-        while (!textArea && attempts < maxAttempts) {
+        while (!textArea && textAreaAttempts < maxTextAreaAttempts) {
           await new Promise(resolve => setTimeout(resolve, 100));
           textArea = buttonDiv.querySelector("textarea");
-          attempts++;
+          textAreaAttempts++;
         }
         
         if (!textArea) throw new Error('Textarea not found after multiple attempts');
@@ -702,10 +715,9 @@ async function editMessage(messageId: string, message: string) {
         let iterations = 0;
         
         while (currentElement && iterations < 10) {
-          const buttons = currentElement.querySelectorAll('button');
-          sendButton = Array.from(buttons).find(
-            button => button.textContent?.trim() === 'Send'
-          ) as HTMLButtonElement || null;
+          const buttons = Array.from(currentElement.querySelectorAll('button'));
+          // Send button is always the second button in the textarea container
+          sendButton = buttons[1] as HTMLButtonElement || null;
           if (sendButton) break;
           
           currentElement = currentElement.parentElement;
@@ -773,25 +785,38 @@ async function respondToMessage(childrenIds: string[], message: string) {
         const buttonDiv = element.parentElement?.parentElement;
         if (!buttonDiv) throw new Error('Button container not found');
 
-        // Click edit button
-        const buttons = buttonDiv.querySelectorAll("button");
-        const editButton = Array.from(buttons).find(button => 
-          button.getAttribute('aria-label') === "Edit message"
-        );
-        if (!editButton) throw new Error('Edit button not found');
+        let button = null;
+        let attempts = 0;
+        const maxAttempts = 50;
 
-        editButton.click();
+        while (!button && attempts < maxAttempts) {
+          const buttons = Array.from(buttonDiv.querySelectorAll("button"));
+          // For user messages, buttons are [copy, edit, left, right]
+          // For assistant messages, buttons are [buttons..., left, right, copy, thumbs up, thumbs down, read aloud, regenerate]
+          const isAssistant = element.getAttribute('data-message-author-role') === 'assistant';
+          const buttonIndex = isAssistant ? buttons.length - 7 : 1; // edit is always second button for user, or 7th from end for assistant
+          button = buttons[buttonIndex];
+          
+          if (!button) {
+            attempts++;
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
+
+        if (!button) throw new Error('Edit button not found');
+
+        button.click();
         await waitForDomChange(buttonDiv);
 
         // Set textarea value
         let textArea = buttonDiv.querySelector("textarea");
-        let attempts = 0;
-        const maxAttempts = 5;
+        let textAreaAttempts = 0;
+        const maxTextAreaAttempts = 5;
         
-        while (!textArea && attempts < maxAttempts) {
+        while (!textArea && textAreaAttempts < maxTextAreaAttempts) {
           await new Promise(resolve => setTimeout(resolve, 100));
           textArea = buttonDiv.querySelector("textarea");
-          attempts++;
+          textAreaAttempts++;
         }
         
         if (!textArea) throw new Error('Textarea not found after multiple attempts');
@@ -806,10 +831,9 @@ async function respondToMessage(childrenIds: string[], message: string) {
         let iterations = 0;
 
         while (currentElement && iterations < 10) {
-          const buttons = currentElement.querySelectorAll('button');
-          sendButton = Array.from(buttons).find(
-            button => button.textContent?.trim() === 'Send'
-          ) as HTMLButtonElement || null;
+          const buttons = Array.from(currentElement.querySelectorAll('button'));
+          // Send button is always the second button in the textarea container
+          sendButton = buttons[1] as HTMLButtonElement || null;
           if (sendButton) break;
 
           currentElement = currentElement.parentElement;
@@ -970,6 +994,7 @@ async function selectBranch(stepsToTake: any[]) {
     await chrome.scripting.executeScript({
       target: { tabId: currentTab.id },
       func: (stepsToTake) => {
+        console.log("stepsToTake", stepsToTake);
 
         // Function to trigger native events on a specific element
         function triggerNativeEvents(element: Element) {
@@ -1053,18 +1078,27 @@ async function selectBranch(stepsToTake: any[]) {
                 throw new Error(`Button container not found for nodeId: ${step.nodeId}`);
               }
 
-              // Find the navigation button by aria-label
-              const targetLabel = step.stepsLeft > 0 ? "Previous response" : "Next response";
-
+              // to find the correct button to press, we need to know if the message is an assistant message or not
               let button = null;
               let attempts = 0;
-
               const maxAttempts = 50; // Prevent infinite loop
-
 
               while (!button && attempts < maxAttempts) {
                 const buttons = Array.from(buttonDiv.querySelectorAll("button"));
-                button = buttons.find(btn => btn.getAttribute('aria-label') === targetLabel);
+                
+                // Calculate button index based on role and steps
+                let buttonIndex = 0;
+                if (step.role === "assistant") {
+                  // in the assistant case, we can have multiple buttons in the div (from the response) but the left and right buttons
+                  // are always 6 and 5 steps from the end of the array respectively
+                  // [buttons..., left, right, copy, thumbs up, thumbs down, read alout, regenerate]
+                  buttonIndex = buttons.length - 7 + (step.stepsLeft > 0 ? 0 : 1);
+                } else {
+                  // buttons are [copy, edit, left, right]
+                  buttonIndex = step.stepsLeft > 0 ? 2 : 3;
+                }
+                
+                button = buttons[buttonIndex];
                 
                 if (!button) {
                   // Process element and its children recursively up to 5 levels
@@ -1431,7 +1465,6 @@ async function editMessageClaude(messageText: string, newMessage: string) {
         }
 
         const performEdit = async () => {
-          console.log('🚀 Starting performEdit');
           
           // Find the message element
           const normalizedTargetText = messageText.trim().replace(/\s+/g, ' ');
@@ -1452,7 +1485,6 @@ async function editMessageClaude(messageText: string, newMessage: string) {
           }
 
           // Find the edit button using the findButtons function
-          console.log('🔍 Looking for buttons');
           const buttons = findButtons(element);
           if (!buttons) {
             console.error('No buttons found');

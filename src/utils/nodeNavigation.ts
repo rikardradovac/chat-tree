@@ -6,6 +6,7 @@ export const calculateSteps = (nodes: OpenAINode[], targetId: string) => {
     nodeId: string;
     stepsLeft: number;
     stepsRight: number;
+    role: string;
   }> = [];
 
   let currentNode = nodes.find((node) => node.id === targetId);
@@ -36,6 +37,7 @@ export const calculateSteps = (nodes: OpenAINode[], targetId: string) => {
             nodeId: parent.children[i],
             stepsLeft: -1,
             stepsRight: 1,
+            role: currentNode.data.role!,
           });
         }
       } else {
@@ -58,6 +60,7 @@ export const calculateSteps = (nodes: OpenAINode[], targetId: string) => {
             nodeId: parent.children[tempActiveChildIndex],
             stepsLeft: moveRight ? -1 : 1,
             stepsRight: moveRight ? 1 : -1,
+            role: currentNode.data.role!,
           });
         }
 
