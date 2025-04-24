@@ -994,7 +994,6 @@ async function selectBranch(stepsToTake: any[]) {
     await chrome.scripting.executeScript({
       target: { tabId: currentTab.id },
       func: (stepsToTake) => {
-        console.log("stepsToTake", stepsToTake);
 
         // Function to trigger native events on a specific element
         function triggerNativeEvents(element: Element) {
