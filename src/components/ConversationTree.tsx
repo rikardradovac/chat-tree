@@ -246,10 +246,13 @@ const ConversationTree = () => {
 
   const onNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: any) => {
+      // Ensure ref is treated as RefObject<HTMLDivElement> to match function signature
       if (provider === 'openai') {
-        createContextMenuHandler(ref, setMenu)(event, node);
+        // Use the ref as is, the function handles null checking internally
+        createContextMenuHandler(ref as React.RefObject<HTMLDivElement>, setMenu)(event, node);
       } else {
-        createClaudeContextMenuHandler(ref, setMenu, nodes)(event, node);
+        // Use the ref as is, the function handles null checking internally
+        createClaudeContextMenuHandler(ref as React.RefObject<HTMLDivElement>, setMenu, nodes)(event, node);
       }
     },
     [ref, setMenu, provider, nodes]
