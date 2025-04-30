@@ -1077,48 +1077,43 @@ async function selectBranch(stepsToTake: any[]) {
                 throw new Error(`Button container not found for nodeId: ${step.nodeId}`);
               }
 
-              // to find the correct button to press, we need to know if the message is an assistant message or not
-              let button = null;
-              let attempts = 0;
-              const maxAttempts = 50; // Prevent infinite loop
-
-              while (!button && attempts < maxAttempts) {
-                const buttons = Array.from(buttonDiv.querySelectorAll("button"));
-                
-                // Calculate button index based on role and steps
-                let buttonIndex = 0;
+              const findNavigationButton = (buttonDiv: Element, step: { role: string, stepsLeft: number, nodeId: string }) => {
                 if (step.role === "assistant") {
-                  // in the assistant case, we can have multiple buttons in the div (from the response) but the left and right buttons
-                  // are always 6 and 5 steps from the end of the array respectively
-                  // [buttons..., left, right, copy, thumbs up, thumbs down, read alout, regenerate]
-                  buttonIndex = buttons.length - 7 + (step.stepsLeft > 0 ? 0 : 1);
-                } else {
-                  // buttons are [copy, edit, left, right]
-                  buttonIndex = step.stepsLeft > 0 ? 2 : 3;
+                  const container = buttonDiv.querySelector('.text-token-text-secondary.flex.items-center.justify-center');
+                  const buttons = Array.from(container?.querySelectorAll('button') || []);
+                  return buttons[step.stepsLeft > 0 ? 0 : 1]; // 0 for left, 1 for right
                 }
                 
-                button = buttons[buttonIndex];
+                // User message: buttons are [copy, edit, left, right]
+                const buttons = Array.from(buttonDiv.querySelectorAll("button"));
+                return buttons[step.stepsLeft > 0 ? 2 : 3]; // 2 for left, 3 for right
+              };
+
+              const processElementRecursively = (element: Element, depth = 0) => {
+                if (depth > 5) return;
+                triggerNativeEvents(element);
+                Array.from(element.children).forEach(child => {
+                  processElementRecursively(child, depth + 1);
+                });
+              };
+
+              let button = null;
+              let attempts = 0;
+              const maxAttempts = 50;
+
+              while (!button && attempts < maxAttempts) {
+                button = findNavigationButton(buttonDiv, step);
                 
                 if (!button) {
-                  // Process element and its children recursively up to 5 levels
-                  function processElementRecursively(element: Element, depth: number) {
-                    if (depth > 5) return;
-                    triggerNativeEvents(element);
-                    Array.from(element.children).forEach(child => {
-                      processElementRecursively(child, depth + 1);
-                    });
-                  }
-                  
-                  processElementRecursively(element, 0);
+                  processElementRecursively(element);
                   attempts++;
                 }
               }
-              
+
               if (!button) {
-                throw new Error(`Button with required aria-label not found for nodeId: ${step.nodeId}`);
+                throw new Error(`Navigation button not found for node: ${step.nodeId}`);
               }
 
-              // Click the button and wait for DOM changes
               button.click();
               await waitForDomChange();
             }
