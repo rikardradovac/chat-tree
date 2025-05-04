@@ -44,7 +44,7 @@ A browser extension that visualizes ChatGPT and Claude.ai conversations as inter
    - Click "Load unpacked"
    - Select the `dist` directory from this project
 
-## Usage 📱
+## Usage 
 
 1. Open a ChatGPT or Claude.ai conversation
 2. Click the extension icon to visualize the conversation as a graph
@@ -65,7 +65,7 @@ npm run dev
 npm run build
 ```
 
-## 🔐 Security & Privacy
+## Security & Privacy
 
 This extension requires the following permissions to function:
 
