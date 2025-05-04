@@ -26,7 +26,7 @@ A browser extension that visualizes ChatGPT and Claude.ai conversations as inter
 - [@dagrejs/dagre](https://github.com/dagrejs/dagre) - Graph creation
 - [Chrome Extension APIs](https://developer.chrome.com/docs/extensions/reference/)
 
-## Installation 🔧
+## Installation
 
 1. Clone this repository
 2. Install dependencies:
@@ -83,7 +83,7 @@ This extension requires the `webRequest` permission to:
 
 All data processing happens locally in your browser. No data is sent to external servers.
 
-## License 📄
+## License 
 
 MIT
 
