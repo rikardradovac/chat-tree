@@ -156,6 +156,16 @@ export const ContextMenu = (props: ContextMenuProps) => {
                 >
                     Select
                 </button>
+                <button 
+                    className="w-full px-2 py-1.5 text-sm text-left text-gray-700 hover:bg-gray-50 rounded transition-colors" 
+                    onClick={() => {
+                        window.dispatchEvent(new CustomEvent('expand-node', {
+                            detail: { nodeId: props.messageId }
+                        }));
+                     }}
+                    >
+                    Open
+                </button>
                 {hasChildren && (
                     <button 
                         className="w-full px-2 py-1.5 text-sm text-left text-gray-700 hover:bg-gray-50 rounded transition-colors" 
