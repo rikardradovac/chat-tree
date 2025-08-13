@@ -276,9 +276,8 @@ async function triggerNativeArticleEvents() {
         }
 
         const eventTypes = [
-          'mouseover', 'mouseenter', 'mousemove', 'mousedown', 'mouseup', 'click',
-          'pointerover', 'pointerenter', 'pointerdown', 'pointerup', 'pointermove', 'pointercancel',
-          'focus', 'focusin'
+          'pointerover', 'pointerenter', 'pointermove',
+          'mouseover', 'mouseenter', 'mousemove'
         ];
 
         for (const eventType of eventTypes) {
